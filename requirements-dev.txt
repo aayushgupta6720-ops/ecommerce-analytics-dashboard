@@ -1,0 +1,12 @@
+-r requirements.txt
+# Rebuilding the dataset from the UCI xlsx
+openpyxl==3.1.5
+# Power BI export and PBIP validation
+xlsxwriter==3.2.9
+jsonschema==4.26.0
+referencing==0.37.0
+# Tests and screenshots
+pytest==9.1.1
+psutil==7.2.2
+playwright==1.63.0
+pillow==12.3.0

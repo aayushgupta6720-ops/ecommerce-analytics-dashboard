@@ -1,0 +1,162 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "pr_table",
+  "position": {
+    "x": 652,
+    "y": 96,
+    "z": 11,
+    "width": 612,
+    "height": 608,
+    "tabOrder": 11
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_product"
+                    }
+                  },
+                  "Property": "stock_code"
+                }
+              },
+              "queryRef": "dim_product.stock_code",
+              "nativeQueryRef": "stock_code"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_product"
+                    }
+                  },
+                  "Property": "description"
+                }
+              },
+              "queryRef": "dim_product.description",
+              "nativeQueryRef": "description"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_product"
+                    }
+                  },
+                  "Property": "abc_class"
+                }
+              },
+              "queryRef": "dim_product.abc_class",
+              "nativeQueryRef": "abc_class"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Revenue"
+                }
+              },
+              "queryRef": "fact_sales.Revenue",
+              "nativeQueryRef": "Revenue"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Units"
+                }
+              },
+              "queryRef": "fact_sales.Units",
+              "nativeQueryRef": "Units"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Orders"
+                }
+              },
+              "queryRef": "fact_sales.Orders",
+              "nativeQueryRef": "Orders"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Pareto Cumulative %"
+                }
+              },
+              "queryRef": "fact_sales.Pareto Cumulative %",
+              "nativeQueryRef": "Pareto Cumulative %"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "fact_sales"
+                  }
+                },
+                "Property": "Revenue"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": false
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Product table'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

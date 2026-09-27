@@ -1,0 +1,134 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "re_products",
+  "position": {
+    "x": 652,
+    "y": 208,
+    "z": 21,
+    "width": 612,
+    "height": 496,
+    "tabOrder": 21
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "product_returns"
+                    }
+                  },
+                  "Property": "description"
+                }
+              },
+              "queryRef": "product_returns.description",
+              "nativeQueryRef": "description"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "product_returns"
+                    }
+                  },
+                  "Property": "units_sold"
+                }
+              },
+              "queryRef": "product_returns.units_sold",
+              "nativeQueryRef": "units_sold"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "product_returns"
+                    }
+                  },
+                  "Property": "units_cancelled"
+                }
+              },
+              "queryRef": "product_returns.units_cancelled",
+              "nativeQueryRef": "units_cancelled"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "product_returns"
+                    }
+                  },
+                  "Property": "cancelled_value"
+                }
+              },
+              "queryRef": "product_returns.cancelled_value",
+              "nativeQueryRef": "cancelled_value"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "product_returns"
+                    }
+                  },
+                  "Property": "return_rate"
+                }
+              },
+              "queryRef": "product_returns.return_rate",
+              "nativeQueryRef": "return_rate"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "product_returns"
+                  }
+                },
+                "Property": "cancelled_value"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": false
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Most-cancelled products'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "re_trend",
+  "position": {
+    "x": 16,
+    "y": 208,
+    "z": 20,
+    "width": 620,
+    "height": 496,
+    "tabOrder": 20
+  },
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_date"
+                    }
+                  },
+                  "Property": "month_start"
+                }
+              },
+              "queryRef": "dim_date.month_start",
+              "nativeQueryRef": "month_start"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Cancellation Rate"
+                }
+              },
+              "queryRef": "fact_sales.Cancellation Rate",
+              "nativeQueryRef": "Cancellation Rate"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Cancellation rate by month'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "ov_heat",
+  "position": {
+    "x": 16,
+    "y": 474,
+    "z": 22,
+    "width": 780,
+    "height": 230,
+    "tabOrder": 22
+  },
+  "visual": {
+    "visualType": "pivotTable",
+    "query": {
+      "queryState": {
+        "Rows": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_date"
+                    }
+                  },
+                  "Property": "weekday_name"
+                }
+              },
+              "queryRef": "dim_date.weekday_name",
+              "nativeQueryRef": "weekday_name"
+            }
+          ]
+        },
+        "Columns": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "hour"
+                }
+              },
+              "queryRef": "fact_sales.hour",
+              "nativeQueryRef": "hour"
+            }
+          ]
+        },
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Orders"
+                }
+              },
+              "queryRef": "fact_sales.Orders",
+              "nativeQueryRef": "Orders"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Orders by weekday and hour'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

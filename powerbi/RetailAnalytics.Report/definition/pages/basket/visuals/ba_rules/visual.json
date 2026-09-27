@@ -1,0 +1,150 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "ba_rules",
+  "position": {
+    "x": 16,
+    "y": 96,
+    "z": 2,
+    "width": 1248,
+    "height": 608,
+    "tabOrder": 2
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "basket_rules"
+                    }
+                  },
+                  "Property": "antecedent_desc"
+                }
+              },
+              "queryRef": "basket_rules.antecedent_desc",
+              "nativeQueryRef": "antecedent_desc",
+              "displayName": "If they bought"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "basket_rules"
+                    }
+                  },
+                  "Property": "consequent_desc"
+                }
+              },
+              "queryRef": "basket_rules.consequent_desc",
+              "nativeQueryRef": "consequent_desc",
+              "displayName": "They also bought"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "basket_rules"
+                    }
+                  },
+                  "Property": "pair_baskets"
+                }
+              },
+              "queryRef": "basket_rules.pair_baskets",
+              "nativeQueryRef": "pair_baskets"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "basket_rules"
+                    }
+                  },
+                  "Property": "support"
+                }
+              },
+              "queryRef": "basket_rules.support",
+              "nativeQueryRef": "support"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "basket_rules"
+                    }
+                  },
+                  "Property": "confidence"
+                }
+              },
+              "queryRef": "basket_rules.confidence",
+              "nativeQueryRef": "confidence"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "basket_rules"
+                    }
+                  },
+                  "Property": "lift"
+                }
+              },
+              "queryRef": "basket_rules.lift",
+              "nativeQueryRef": "lift"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "basket_rules"
+                  }
+                },
+                "Property": "lift"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": false
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Association rules (sorted by lift)'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

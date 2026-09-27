@@ -1,0 +1,84 @@
+/// Monthly acquisition cohorts x months since first order (full date range).
+table cohort_retention
+	lineageTag: fc2275dc-99f0-55db-8602-946c57b7eb12
+
+	/// Returning customers / cohort size. Across cohorts this is the size-weighted average.
+	measure 'Retention %' = DIVIDE(SUM(cohort_retention[customers]), SUM(cohort_retention[cohort_size]))
+		formatString: 0.0%
+		displayFolder: Cohorts
+		lineageTag: 0353c01f-c587-5f1a-871b-ad8ebab0bf0d
+
+	column cohort
+		dataType: dateTime
+		formatString: mmm yyyy
+		lineageTag: f4cfdaa8-f00b-5803-8a18-8b4ad92d7e21
+		summarizeBy: none
+		sourceColumn: cohort
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation SummarizationSetBy = User
+
+	column cohort_label
+		dataType: string
+		lineageTag: a34c0c36-3d54-5088-95af-be3cb97af0e2
+		summarizeBy: none
+		sourceColumn: cohort_label
+
+		annotation SummarizationSetBy = User
+
+	column period
+		dataType: int64
+		lineageTag: cd3a6005-5588-5d45-a724-2a6342e98189
+		summarizeBy: none
+		sourceColumn: period
+
+		annotation SummarizationSetBy = User
+
+	column customers
+		dataType: int64
+		formatString: #,0
+		lineageTag: c7da55af-bc3c-54c9-b911-fdf9ea1cb7c8
+		summarizeBy: none
+		sourceColumn: customers
+
+		annotation SummarizationSetBy = User
+
+	column cohort_size
+		dataType: int64
+		formatString: #,0
+		lineageTag: e2b771a1-e0f8-53a9-b17f-1191fdbc8047
+		summarizeBy: none
+		sourceColumn: cohort_size
+
+		annotation SummarizationSetBy = User
+
+	column retention
+		dataType: double
+		formatString: 0.0%
+		lineageTag: 98dc2ef7-73a7-568a-bc8f-ceb23113afbb
+		summarizeBy: none
+		sourceColumn: retention
+
+		annotation SummarizationSetBy = User
+
+	column revenue
+		dataType: double
+		formatString: \£#,0
+		lineageTag: 2c5e7fe9-a7bb-549f-8b08-881e8a92536b
+		summarizeBy: none
+		sourceColumn: revenue
+
+		annotation SummarizationSetBy = User
+
+	partition cohort_retention = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "cohort_retention.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"cohort", type date}, {"cohort_label", type text}, {"period", Int64.Type}, {"customers", Int64.Type}, {"cohort_size", Int64.Type}, {"retention", type number}, {"revenue", type number}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

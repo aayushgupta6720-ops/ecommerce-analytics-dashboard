@@ -1,0 +1,162 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "ge_table",
+  "position": {
+    "x": 552,
+    "y": 96,
+    "z": 11,
+    "width": 712,
+    "height": 608,
+    "tabOrder": 11
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_country"
+                    }
+                  },
+                  "Property": "country"
+                }
+              },
+              "queryRef": "dim_country.country",
+              "nativeQueryRef": "country"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_country"
+                    }
+                  },
+                  "Property": "region"
+                }
+              },
+              "queryRef": "dim_country.region",
+              "nativeQueryRef": "region"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Revenue"
+                }
+              },
+              "queryRef": "fact_sales.Revenue",
+              "nativeQueryRef": "Revenue"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Country Revenue Share"
+                }
+              },
+              "queryRef": "fact_sales.Country Revenue Share",
+              "nativeQueryRef": "Country Revenue Share"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Orders"
+                }
+              },
+              "queryRef": "fact_sales.Orders",
+              "nativeQueryRef": "Orders"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Customers"
+                }
+              },
+              "queryRef": "fact_sales.Customers",
+              "nativeQueryRef": "Customers"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Avg Order Value"
+                }
+              },
+              "queryRef": "fact_sales.Avg Order Value",
+              "nativeQueryRef": "Avg Order Value"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "fact_sales"
+                  }
+                },
+                "Property": "Revenue"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": false
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Countries'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

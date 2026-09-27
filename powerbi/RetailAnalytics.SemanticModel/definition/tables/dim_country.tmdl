@@ -1,0 +1,41 @@
+/// Countries with ISO-3 code and region.
+table dim_country
+	lineageTag: 3357316c-4334-50cc-92a0-b751040f981e
+
+	column country
+		dataType: string
+		isKey
+		dataCategory: Country
+		lineageTag: de981915-698a-54cd-88a5-7b5b47002198
+		summarizeBy: none
+		sourceColumn: country
+
+		annotation SummarizationSetBy = User
+
+	column iso3
+		dataType: string
+		lineageTag: 7e02c1a9-3431-5469-bc73-1761353c90df
+		summarizeBy: none
+		sourceColumn: iso3
+
+		annotation SummarizationSetBy = User
+
+	column region
+		dataType: string
+		lineageTag: dc1453c4-ff31-53f7-b4d0-a684e89e50ff
+		summarizeBy: none
+		sourceColumn: region
+
+		annotation SummarizationSetBy = User
+
+	partition dim_country = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "dim_country.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"country", type text}, {"iso3", type text}, {"region", type text}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

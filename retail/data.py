@@ -1,0 +1,125 @@
+"""Streamlit data layer: one shared copy of the transactions, cached aggregates keyed by filter values.
+
+Cached functions take a `Filters` tuple (dates + country names), never a DataFrame, so
+Streamlit hashes a few small values instead of a 1M-row frame on every rerun.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import gc
+import sys
+from datetime import date, timedelta
+from pathlib import Path
+from typing import NamedTuple
+
+import pandas as pd
+import pyarrow.feather as feather
+import streamlit as st
+
+from retail import metrics
+
+DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "processed" / "transactions.parquet"
+# Uncompressed Arrow copy made at build time (scripts/build_dataset.py --feather-only). Memory-mapping
+# it costs about half the RAM of decoding the zstd Parquet, which matters on a 512MB instance.
+FEATHER_PATH = DATA_PATH.with_suffix(".feather")
+
+
+class Filters(NamedTuple):
+    start: date
+    end: date
+    countries: tuple[str, ...] = ()  # empty = all countries
+
+    def describe(self) -> str:
+        where = "All countries" if not self.countries else (
+            ", ".join(self.countries) if len(self.countries) <= 3 else f"{len(self.countries)} countries")
+        return f"{self.start:%d %b %Y} – {self.end:%d %b %Y} · {where}"
+
+
+@st.cache_resource(show_spinner="Loading 1M transactions…")
+def load_data() -> pd.DataFrame:
+    """Shared across sessions and treated as read-only."""
+    if FEATHER_PATH.exists():
+        df = feather.read_table(FEATHER_PATH, memory_map=True).to_pandas(self_destruct=True)
+    else:
+        df = pd.read_parquet(DATA_PATH)
+    _release_freed_memory()
+    return df
+
+
+def _release_freed_memory() -> None:
+    """Hand decode buffers back to the OS; glibc otherwise keeps them for reuse."""
+    gc.collect()
+    if sys.platform.startswith("linux"):
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except OSError:
+            pass
+
+
+@st.cache_data(show_spinner=False)
+def bounds() -> tuple[date, date]:
+    ts = load_data()["invoice_date"]
+    return ts.min().date(), ts.max().date()
+
+
+@st.cache_data(show_spinner=False)
+def countries_by_revenue() -> list[str]:
+    return metrics.country_summary(load_data())["country"].tolist()
+
+
+def filtered(f: Filters) -> pd.DataFrame:
+    return metrics.filter_frame(load_data(), f.start, f.end, f.countries)
+
+
+@st.cache_data(max_entries=256, show_spinner=False)
+def compute(metric: str, f: Filters, **params):
+    """Run `retail.metrics.<metric>` on the filtered frame; results are cached per filter + params."""
+    return getattr(metrics, metric)(filtered(f), **params)
+
+
+@st.cache_data(show_spinner=False)
+def acquisition_months() -> pd.Series:
+    return metrics.first_purchase_month(load_data())
+
+
+@st.cache_data(max_entries=64, show_spinner=False)
+def cohorts(f: Filters) -> pd.DataFrame:
+    return metrics.cohort_table(filtered(f), acquisition_months())
+
+
+def rfm(f: Filters) -> pd.DataFrame:
+    return compute("rfm", f, snapshot=f.end + timedelta(days=1))
+
+
+def kpis_with_deltas(f: Filters) -> tuple[dict, dict, Filters | None]:
+    """Current KPIs, deltas vs the previous period of equal length (None if it predates the data)."""
+    current = compute("kpis", f)
+    prev_start, prev_end = metrics.previous_period(f.start, f.end)
+    if prev_start < bounds()[0]:
+        return current, metrics.kpi_deltas(current, None), None
+    prev = Filters(prev_start, prev_end, f.countries)
+    return current, metrics.kpi_deltas(current, compute("kpis", prev)), prev
+
+
+def current_filters() -> Filters:
+    """Set by app.py's sidebar before the page runs."""
+    if "filters" not in st.session_state:
+        start, end = bounds()
+        st.session_state["filters"] = Filters(start, end)
+    return st.session_state["filters"]
+
+
+def page_header(title: str, blurb: str) -> Filters:
+    f = current_filters()
+    st.header(title)
+    st.caption(f"{blurb}  \n**Showing:** {f.describe()}")
+    return f
+
+
+def empty_state(df: pd.DataFrame | dict, what: str = "data") -> bool:
+    """Show a friendly message and return True when the filters leave nothing to plot."""
+    is_empty = (df.get("orders", 0) == 0) if isinstance(df, dict) else len(df) == 0
+    if is_empty:
+        st.info(f"No {what} for these filters. Widen the date range or add countries in the sidebar.")
+    return is_empty

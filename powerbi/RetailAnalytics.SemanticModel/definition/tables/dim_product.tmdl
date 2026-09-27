@@ -1,0 +1,48 @@
+/// Products. ABC class: A = products making the first 80% of revenue, B = next 15%, C = the rest.
+table dim_product
+	lineageTag: 7ba6d025-4ad4-5b6e-a15d-9489085069c4
+
+	column stock_code
+		dataType: string
+		isKey
+		lineageTag: b74ea6a5-a432-5942-b04f-e74ce55e4364
+		summarizeBy: none
+		sourceColumn: stock_code
+
+		annotation SummarizationSetBy = User
+
+	column description
+		dataType: string
+		lineageTag: fc6f8eec-047c-5266-877c-beb8bd979342
+		summarizeBy: none
+		sourceColumn: description
+
+		annotation SummarizationSetBy = User
+
+	column revenue_rank
+		dataType: int64
+		lineageTag: 78f5f4b5-865b-5680-a805-a24e06f14eaa
+		summarizeBy: none
+		sourceColumn: revenue_rank
+
+		annotation SummarizationSetBy = User
+
+	column abc_class
+		dataType: string
+		lineageTag: 96b2cec6-5b53-53f1-a35f-d106c2f30575
+		summarizeBy: none
+		sourceColumn: abc_class
+
+		annotation SummarizationSetBy = User
+
+	partition dim_product = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "dim_product.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"stock_code", type text}, {"description", type text}, {"revenue_rank", Int64.Type}, {"abc_class", type text}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

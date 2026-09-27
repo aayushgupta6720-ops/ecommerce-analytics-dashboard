@@ -1,0 +1,116 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "cu_table",
+  "position": {
+    "x": 16,
+    "y": 372,
+    "z": 3,
+    "width": 1248,
+    "height": 332,
+    "tabOrder": 3
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "segment"
+                }
+              },
+              "queryRef": "dim_customer.segment",
+              "nativeQueryRef": "segment"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Customers"
+                }
+              },
+              "queryRef": "dim_customer.Segment Customers",
+              "nativeQueryRef": "Segment Customers"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Customer Share"
+                }
+              },
+              "queryRef": "dim_customer.Segment Customer Share",
+              "nativeQueryRef": "Segment Customer Share"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Revenue"
+                }
+              },
+              "queryRef": "dim_customer.Segment Revenue",
+              "nativeQueryRef": "Segment Revenue"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Revenue Share"
+                }
+              },
+              "queryRef": "dim_customer.Segment Revenue Share",
+              "nativeQueryRef": "Segment Revenue Share"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Segment summary'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

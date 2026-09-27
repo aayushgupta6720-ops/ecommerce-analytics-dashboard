@@ -1,0 +1,26 @@
+{
+  "name": "Retail Analytics",
+  "dataColors": [
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#008300",
+    "#4a3aa7",
+    "#e34948"
+  ],
+  "foreground": "#0b0b0b",
+  "foregroundNeutralSecondary": "#52514e",
+  "foregroundNeutralTertiary": "#898781",
+  "background": "#fcfcfb",
+  "backgroundLight": "#f3f2ee",
+  "backgroundNeutral": "#e1e0d9",
+  "tableAccent": "#2a78d6",
+  "good": "#0ca30c",
+  "neutral": "#fab219",
+  "bad": "#d03b3b",
+  "maximum": "#0d366b",
+  "center": "#6da7ec",
+  "minimum": "#cde2fb"
+}

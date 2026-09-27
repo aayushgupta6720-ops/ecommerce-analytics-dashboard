@@ -1,0 +1,19 @@
+relationship c5a95169-eb8c-5552-8739-825ad3d6b43a
+	fromColumn: fact_sales.invoice_date
+	toColumn: dim_date.date
+
+relationship 6782c20f-03fb-5f88-8061-3ca02ce67e46
+	fromColumn: fact_sales.stock_code
+	toColumn: dim_product.stock_code
+
+relationship 2388ad59-1126-5124-a703-cc84a40617fb
+	fromColumn: fact_sales.customer_id
+	toColumn: dim_customer.customer_id
+
+relationship 7a197126-e070-53b2-aa0b-d10399f02040
+	fromColumn: fact_sales.country
+	toColumn: dim_country.country
+
+relationship dddd6bfb-79cc-5e28-899a-48a4915ff566
+	fromColumn: product_returns.stock_code
+	toColumn: dim_product.stock_code

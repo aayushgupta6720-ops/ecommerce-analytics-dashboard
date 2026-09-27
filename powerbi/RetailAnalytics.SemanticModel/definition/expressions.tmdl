@@ -1,0 +1,5 @@
+/// Folder holding the exported CSVs (keep the trailing backslash). Change it in Transform data > Edit parameters.
+expression DataFolder = "C:\RetailAnalytics\powerbi\data\" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: b7616238-ab2c-5773-8c09-e8c25c81b169
+
+	annotation PBI_ResultType = Text

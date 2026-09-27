@@ -1,0 +1,78 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "cu_tree",
+  "position": {
+    "x": 16,
+    "y": 16,
+    "z": 1,
+    "width": 600,
+    "height": 340,
+    "tabOrder": 1
+  },
+  "visual": {
+    "visualType": "treemap",
+    "query": {
+      "queryState": {
+        "Group": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "segment"
+                }
+              },
+              "queryRef": "dim_customer.segment",
+              "nativeQueryRef": "segment"
+            }
+          ]
+        },
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Customers"
+                }
+              },
+              "queryRef": "dim_customer.Segment Customers",
+              "nativeQueryRef": "Segment Customers"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Customers per segment (as of 10 Dec 2011)'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

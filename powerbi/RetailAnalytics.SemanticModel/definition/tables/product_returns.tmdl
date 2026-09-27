@@ -1,0 +1,85 @@
+/// Cancelled units and value per product (products with 100+ units sold).
+table product_returns
+	lineageTag: cf616c95-f81c-5522-a869-24ea033f3b57
+
+	column stock_code
+		dataType: string
+		lineageTag: 011d4101-f2fd-57be-ad75-bc1fd187458e
+		summarizeBy: none
+		sourceColumn: stock_code
+
+		annotation SummarizationSetBy = User
+
+	column description
+		dataType: string
+		lineageTag: ac49b09f-65b0-577a-bd9e-1aa065642580
+		summarizeBy: none
+		sourceColumn: description
+
+		annotation SummarizationSetBy = User
+
+	column units_sold
+		dataType: int64
+		formatString: #,0
+		lineageTag: 6a8db034-e285-5072-aed3-04a60099b36b
+		summarizeBy: none
+		sourceColumn: units_sold
+
+		annotation SummarizationSetBy = User
+
+	column revenue
+		dataType: double
+		formatString: \£#,0
+		lineageTag: ded13d4d-e777-5463-8f2f-4ade4036d3b6
+		summarizeBy: none
+		sourceColumn: revenue
+
+		annotation SummarizationSetBy = User
+
+	column units_cancelled
+		dataType: int64
+		formatString: #,0
+		lineageTag: 94930fc6-f110-5514-901e-cf9ca283f077
+		summarizeBy: none
+		sourceColumn: units_cancelled
+
+		annotation SummarizationSetBy = User
+
+	column cancelled_value
+		dataType: double
+		formatString: \£#,0
+		lineageTag: d78e2c1b-50d9-5cb0-ab34-91ed994b817d
+		summarizeBy: none
+		sourceColumn: cancelled_value
+
+		annotation SummarizationSetBy = User
+
+	column cancellations
+		dataType: int64
+		formatString: #,0
+		lineageTag: b68e43e5-9387-5dbe-8384-37211a3784a8
+		summarizeBy: none
+		sourceColumn: cancellations
+
+		annotation SummarizationSetBy = User
+
+	column return_rate
+		dataType: double
+		formatString: 0.0%
+		lineageTag: 74858356-a9d7-56bb-9237-5eede7f6828f
+		summarizeBy: none
+		sourceColumn: return_rate
+
+		annotation SummarizationSetBy = User
+
+	partition product_returns = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "product_returns.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"stock_code", type text}, {"description", type text}, {"units_sold", Int64.Type}, {"revenue", type number}, {"units_cancelled", Int64.Type}, {"cancelled_value", type number}, {"cancellations", Int64.Type}, {"return_rate", type number}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,83 @@
+/// Pairwise rules A -> B at 1% minimum support over all orders.
+table basket_rules
+	lineageTag: fb1fccde-d201-5556-9f62-a2a3e7e887ba
+
+	column antecedent
+		dataType: string
+		lineageTag: ef1806f8-e7e6-52a6-9b34-46cf5864c45c
+		summarizeBy: none
+		sourceColumn: antecedent
+
+		annotation SummarizationSetBy = User
+
+	column antecedent_desc
+		dataType: string
+		lineageTag: 431add87-086a-5a01-b714-cbb51d9b83ce
+		summarizeBy: none
+		sourceColumn: antecedent_desc
+
+		annotation SummarizationSetBy = User
+
+	column consequent
+		dataType: string
+		lineageTag: 0f89cabf-14cc-5b9b-86b4-b8b710e418d8
+		summarizeBy: none
+		sourceColumn: consequent
+
+		annotation SummarizationSetBy = User
+
+	column consequent_desc
+		dataType: string
+		lineageTag: 967c5e15-1ef3-5572-a0fa-d3c7007e16fa
+		summarizeBy: none
+		sourceColumn: consequent_desc
+
+		annotation SummarizationSetBy = User
+
+	column pair_baskets
+		dataType: int64
+		formatString: #,0
+		lineageTag: 523e0bae-b98e-5767-ad1d-30bcb01fee8e
+		summarizeBy: none
+		sourceColumn: pair_baskets
+
+		annotation SummarizationSetBy = User
+
+	column support
+		dataType: double
+		formatString: 0.00%
+		lineageTag: 019ed778-07d5-5af7-a1a2-0566a74a67b8
+		summarizeBy: none
+		sourceColumn: support
+
+		annotation SummarizationSetBy = User
+
+	column confidence
+		dataType: double
+		formatString: 0.0%
+		lineageTag: 27d9d38f-b2d2-5c46-81e9-7570f0bccc53
+		summarizeBy: none
+		sourceColumn: confidence
+
+		annotation SummarizationSetBy = User
+
+	column lift
+		dataType: double
+		formatString: 0.0
+		lineageTag: d2917bf9-f3d9-5795-8976-7f327ceded84
+		summarizeBy: none
+		sourceColumn: lift
+
+		annotation SummarizationSetBy = User
+
+	partition basket_rules = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "basket_rules.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"antecedent", type text}, {"antecedent_desc", type text}, {"consequent", type text}, {"consequent_desc", type text}, {"pair_baskets", Int64.Type}, {"support", type number}, {"confidence", type number}, {"lift", type number}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

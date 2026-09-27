@@ -1,0 +1,135 @@
+/// Identified customers with RFM scores as of 10 Dec 2011 (fixed; does not react to date slicers).
+table dim_customer
+	lineageTag: 673bbf26-36f5-591a-b9f2-5db8103f939c
+
+	/// Customers with an RFM segment.
+	measure 'Segment Customers' = COUNTROWS(FILTER(dim_customer, NOT ISBLANK(dim_customer[segment])))
+		formatString: #,0
+		displayFolder: Customers
+		lineageTag: a98e06e4-ac00-5a1e-93f1-ee21c156d4c9
+
+	/// Lifetime revenue of the customers in view.
+	measure 'Segment Revenue' = SUM(dim_customer[monetary])
+		formatString: \£#,0
+		displayFolder: Customers
+		lineageTag: d220dbb9-00bd-5933-92f2-2b826d6b2a0f
+
+	/// Share of all segmented customers.
+	measure 'Segment Customer Share' = DIVIDE([Segment Customers], CALCULATE([Segment Customers], ALL(dim_customer[segment], dim_customer[segment_order])))
+		formatString: 0.0%
+		displayFolder: Customers
+		lineageTag: b6591601-bdff-5ecd-9f89-c9697e89a1a6
+
+	/// Share of all segmented customers' revenue.
+	measure 'Segment Revenue Share' = DIVIDE([Segment Revenue], CALCULATE([Segment Revenue], ALL(dim_customer[segment], dim_customer[segment_order])))
+		formatString: 0.0%
+		displayFolder: Customers
+		lineageTag: 69a1c9a9-44ec-5763-900e-d5f00edd0564
+
+	column customer_id
+		dataType: int64
+		isKey
+		formatString: 0
+		lineageTag: fd2e5dac-09b9-5acf-a731-518292114a15
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = User
+
+	column country
+		dataType: string
+		lineageTag: 6d405e44-e310-52d5-bde5-ade7ce96bf1f
+		summarizeBy: none
+		sourceColumn: country
+
+		annotation SummarizationSetBy = User
+
+	column acquisition_month
+		dataType: dateTime
+		formatString: mmm yyyy
+		lineageTag: e9dc01e5-06d2-5eb6-bc18-190b41ec38d4
+		summarizeBy: none
+		sourceColumn: acquisition_month
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation SummarizationSetBy = User
+
+	column recency_days
+		dataType: int64
+		lineageTag: 9a35ce5c-eea4-5527-99e2-8e13e6d233dd
+		summarizeBy: none
+		sourceColumn: recency_days
+
+		annotation SummarizationSetBy = User
+
+	column frequency
+		dataType: int64
+		lineageTag: c7e71358-5877-5032-a382-8bc86329aa65
+		summarizeBy: none
+		sourceColumn: frequency
+
+		annotation SummarizationSetBy = User
+
+	column monetary
+		dataType: double
+		formatString: \£#,0
+		lineageTag: e9eded43-c5b9-5ee0-bf14-707fe90ea386
+		summarizeBy: none
+		sourceColumn: monetary
+
+		annotation SummarizationSetBy = User
+
+	column r_score
+		dataType: int64
+		lineageTag: 2758c550-2632-5f98-a300-bbe07dbb7f50
+		summarizeBy: none
+		sourceColumn: r_score
+
+		annotation SummarizationSetBy = User
+
+	column f_score
+		dataType: int64
+		lineageTag: 154bc51e-532e-55f4-930e-1c80e54799aa
+		summarizeBy: none
+		sourceColumn: f_score
+
+		annotation SummarizationSetBy = User
+
+	column m_score
+		dataType: int64
+		lineageTag: 4ceff601-d0a2-5b31-b4e3-748941e7972c
+		summarizeBy: none
+		sourceColumn: m_score
+
+		annotation SummarizationSetBy = User
+
+	column segment_order
+		dataType: int64
+		isHidden
+		lineageTag: 7e0a3ab7-1cfa-5edb-adc9-d1c487d2f01a
+		summarizeBy: none
+		sourceColumn: segment_order
+
+		annotation SummarizationSetBy = User
+
+	column segment
+		dataType: string
+		lineageTag: 9580398e-f9f2-5064-b70b-86fbd53f2f96
+		summarizeBy: none
+		sourceColumn: segment
+		sortByColumn: segment_order
+
+		annotation SummarizationSetBy = User
+
+	partition dim_customer = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "dim_customer.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"customer_id", Int64.Type}, {"country", type text}, {"acquisition_month", type date}, {"recency_days", Int64.Type}, {"frequency", Int64.Type}, {"monetary", type number}, {"r_score", Int64.Type}, {"f_score", Int64.Type}, {"m_score", Int64.Type}, {"segment_order", Int64.Type}, {"segment", type text}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

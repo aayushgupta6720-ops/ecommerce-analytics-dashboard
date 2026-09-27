@@ -1,0 +1,60 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "re_card0",
+  "position": {
+    "x": 16,
+    "y": 96,
+    "z": 10,
+    "width": 405,
+    "height": 96,
+    "tabOrder": 10
+  },
+  "visual": {
+    "visualType": "card",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fact_sales"
+                    }
+                  },
+                  "Property": "Cancelled Value"
+                }
+              },
+              "queryRef": "fact_sales.Cancelled Value",
+              "nativeQueryRef": "Cancelled Value"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Cancelled value'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

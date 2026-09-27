@@ -1,0 +1,186 @@
+/// One row per product invoice line, sales and cancellations (invoice starts with C, negative quantity).
+table fact_sales
+	lineageTag: 6530ed54-a9cb-550c-8381-a5f60718d19e
+
+	/// Gross product sales in GBP (cancellations excluded).
+	measure Revenue = CALCULATE(SUM(fact_sales[revenue]), fact_sales[is_cancellation] = FALSE())
+		formatString: \£#,0
+		displayFolder: Sales
+		lineageTag: 203b4d21-75a0-5bfc-b31b-52382af005e0
+
+	/// Distinct sales invoices.
+	measure Orders = CALCULATE(DISTINCTCOUNT(fact_sales[invoice]), fact_sales[is_cancellation] = FALSE())
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 2444e5ee-a9e2-5f45-a004-0c65cd4838c0
+
+	/// Distinct identified customers; guest lines have no customer ID.
+	measure Customers = CALCULATE(DISTINCTCOUNTNOBLANK(fact_sales[customer_id]), fact_sales[is_cancellation] = FALSE())
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 4f0d08fd-86be-535b-bdf4-d5de09c35da3
+
+	/// Revenue / Orders.
+	measure 'Avg Order Value' = DIVIDE([Revenue], [Orders])
+		formatString: \£#,0.00
+		displayFolder: Sales
+		lineageTag: 9e5aa255-1536-5be3-a3cf-2037207c0052
+
+	/// Units sold.
+	measure Units = CALCULATE(SUM(fact_sales[quantity]), fact_sales[is_cancellation] = FALSE())
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 5037f53d-1a78-5948-bddb-6b0e60970a74
+
+	/// Share of the selected countries' revenue.
+	measure 'Country Revenue Share' = DIVIDE([Revenue], CALCULATE([Revenue], ALLSELECTED(dim_country[country])))
+		formatString: 0.0%
+		displayFolder: Sales
+		lineageTag: c811ca26-8b4b-5c45-84bd-8dc863b52924
+
+	/// Revenue in the same period one year earlier.
+	measure 'Revenue PY' = CALCULATE([Revenue], SAMEPERIODLASTYEAR(dim_date[date]))
+		formatString: \£#,0
+		displayFolder: Time
+		lineageTag: 6d3ff070-7241-58d7-ba8d-c864317b3995
+
+	/// Change vs the same period last year; blank when there is no prior-year data.
+	measure 'Revenue YoY %' =
+			VAR py = [Revenue PY]
+			RETURN IF(NOT ISBLANK(py), DIVIDE([Revenue] - py, py))
+		formatString: 0.0%
+		displayFolder: Time
+		lineageTag: 4eefd824-3b12-50a9-942e-98a8de0e16d9
+
+	/// Cumulative share of revenue from products earning at least as much as this one (80/20 curve).
+	measure 'Pareto Cumulative %' =
+			VAR thisRevenue = [Revenue]
+			VAR ranked = ADDCOLUMNS(ALLSELECTED(dim_product[stock_code]), "@rev", [Revenue])
+			VAR running = SUMX(FILTER(ranked, [@rev] >= thisRevenue), [@rev])
+			RETURN DIVIDE(running, SUMX(ranked, [@rev]))
+		formatString: 0.0%
+		displayFolder: Products
+		lineageTag: 361f7449-d6a3-54e8-9652-82d049fcc5c4
+
+	/// Value of cancelled product lines, as a positive number.
+	measure 'Cancelled Value' = CALCULATE(-SUM(fact_sales[revenue]), fact_sales[is_cancellation] = TRUE())
+		formatString: \£#,0
+		displayFolder: Returns
+		lineageTag: 1491a416-d918-5a90-8533-6acd55a32db6
+
+	/// Cancelled value / gross product sales.
+	measure 'Cancellation Rate' = DIVIDE([Cancelled Value], [Revenue])
+		formatString: 0.0%
+		displayFolder: Returns
+		lineageTag: 662328de-c740-50db-9133-c3bcf28c5265
+
+	/// Gross product sales minus cancellations.
+	measure 'Net Revenue' = [Revenue] - [Cancelled Value]
+		formatString: \£#,0
+		displayFolder: Returns
+		lineageTag: 72afd41b-3f8d-54cc-92dc-d5a737b2f485
+
+	/// Units on cancelled lines, as a positive number.
+	measure 'Units Cancelled' = CALCULATE(-SUM(fact_sales[quantity]), fact_sales[is_cancellation] = TRUE())
+		formatString: #,0
+		displayFolder: Returns
+		lineageTag: a69ef6e4-c785-58b7-89a4-a65a96b158c6
+
+	column invoice
+		dataType: string
+		lineageTag: 3048195e-92cc-5bb4-8148-bf7ffbd75bae
+		summarizeBy: none
+		sourceColumn: invoice
+
+		annotation SummarizationSetBy = User
+
+	column invoice_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: fdb3acc9-5614-5838-b119-830e3483a287
+		summarizeBy: none
+		sourceColumn: invoice_date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation SummarizationSetBy = User
+
+	column hour
+		dataType: int64
+		lineageTag: a5c94193-d61f-5424-9b5d-321b218e7e33
+		summarizeBy: none
+		sourceColumn: hour
+
+		annotation SummarizationSetBy = User
+
+	column stock_code
+		dataType: string
+		lineageTag: 6898ca38-d08b-5c25-89b4-216b042d2432
+		summarizeBy: none
+		sourceColumn: stock_code
+
+		annotation SummarizationSetBy = User
+
+	column customer_id
+		dataType: int64
+		formatString: 0
+		lineageTag: a22e5847-6bfc-5bb5-bd2b-3609b53d834d
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = User
+
+	column country
+		dataType: string
+		lineageTag: 0753263a-60e6-5508-a661-858dc4ede991
+		summarizeBy: none
+		sourceColumn: country
+
+		annotation SummarizationSetBy = User
+
+	column quantity
+		dataType: int64
+		formatString: #,0
+		lineageTag: 4be48e50-5d44-5261-bda9-ecd795440bf5
+		summarizeBy: sum
+		sourceColumn: quantity
+
+		annotation SummarizationSetBy = User
+
+	column price
+		dataType: double
+		formatString: \£#,0.00
+		lineageTag: fec31b8d-d9c4-5d84-a312-a88226ea724a
+		summarizeBy: none
+		sourceColumn: price
+
+		annotation SummarizationSetBy = User
+
+	column revenue
+		dataType: double
+		formatString: \£#,0.00
+		lineageTag: 2256bdf4-a552-52a9-aafa-00ba74da64f9
+		summarizeBy: sum
+		sourceColumn: revenue
+
+		annotation SummarizationSetBy = User
+
+	column is_cancellation
+		dataType: boolean
+		lineageTag: 7a93ab70-0337-59a2-a1a0-7aac9cacce18
+		summarizeBy: none
+		sourceColumn: is_cancellation
+
+		annotation SummarizationSetBy = User
+
+	partition fact_sales = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "fact_sales.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    Promoted = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    Typed = Table.TransformColumnTypes(Promoted, {{"invoice", type text}, {"invoice_date", type date}, {"hour", Int64.Type}, {"stock_code", type text}, {"customer_id", Int64.Type}, {"country", type text}, {"quantity", Int64.Type}, {"price", type number}, {"revenue", type number}, {"is_cancellation", type logical}}, "en-US")
+				in
+				    Typed
+
+	annotation PBI_ResultType = Table

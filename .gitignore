@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+# Downloaded / derived locally
+.cache/
+.screenshots/
+data/raw/
+data/processed/*.feather
+
+# Power BI data files are large (fact_sales.csv ~50MB, workbook ~40MB); regenerate with
+# python scripts/export_powerbi.py
+powerbi/data/*
+!powerbi/data/.gitkeep

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "cu_share",
+  "position": {
+    "x": 632,
+    "y": 16,
+    "z": 2,
+    "width": 632,
+    "height": 340,
+    "tabOrder": 2
+  },
+  "visual": {
+    "visualType": "clusteredBarChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "segment"
+                }
+              },
+              "queryRef": "dim_customer.segment",
+              "nativeQueryRef": "segment"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Customer Share"
+                }
+              },
+              "queryRef": "dim_customer.Segment Customer Share",
+              "nativeQueryRef": "Segment Customer Share"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_customer"
+                    }
+                  },
+                  "Property": "Segment Revenue Share"
+                }
+              },
+              "queryRef": "dim_customer.Segment Revenue Share",
+              "nativeQueryRef": "Segment Revenue Share"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Customer share vs revenue share'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

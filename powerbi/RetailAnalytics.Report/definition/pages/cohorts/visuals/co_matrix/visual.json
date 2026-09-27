@@ -1,0 +1,96 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
+  "name": "co_matrix",
+  "position": {
+    "x": 16,
+    "y": 16,
+    "z": 1,
+    "width": 1248,
+    "height": 688,
+    "tabOrder": 1
+  },
+  "visual": {
+    "visualType": "pivotTable",
+    "query": {
+      "queryState": {
+        "Rows": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "cohort_retention"
+                    }
+                  },
+                  "Property": "cohort_label"
+                }
+              },
+              "queryRef": "cohort_retention.cohort_label",
+              "nativeQueryRef": "cohort_label"
+            }
+          ]
+        },
+        "Columns": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "cohort_retention"
+                    }
+                  },
+                  "Property": "period"
+                }
+              },
+              "queryRef": "cohort_retention.period",
+              "nativeQueryRef": "period"
+            }
+          ]
+        },
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "cohort_retention"
+                    }
+                  },
+                  "Property": "Retention %"
+                }
+              },
+              "queryRef": "cohort_retention.Retention %",
+              "nativeQueryRef": "Retention %"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true,
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Retention % by months since first order'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: retail-analytics-dashboard
+    runtime: python
+    plan: free
+    # The committed zstd parquet is converted to an uncompressed Arrow file at build time;
+    # memory-mapping that at startup uses roughly half the RAM of decoding the parquet.
+    buildCommand: pip install -r requirements.txt && python scripts/build_dataset.py --feather-only
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Streamlit runs each session in its own thread; capping glibc arenas keeps memory
+      # from growing per thread on the 512MB free instance.
+      - key: MALLOC_ARENA_MAX
+        value: "2"
