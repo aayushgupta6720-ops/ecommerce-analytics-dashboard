@@ -4,6 +4,9 @@ An interactive analytics dashboard for the [UCI Online Retail II](https://archiv
 dataset: 1,067,371 invoice lines from a UK online gift retailer, December 2009 to December 2011. It's built
 with Streamlit and Plotly, and there's a matching Power BI kit.
 
+**Live demo:** https://ecommerce-analytics-dashboard-aapp.onrender.com. It runs on Render's free plan,
+which sleeps after 15 minutes idle, so the first visit can take about a minute to wake up.
+
 ![Overview page](docs/screenshots/overview.png)
 
 ## What's in it
@@ -125,7 +128,8 @@ point. The data files aren't committed because they're large; the export regener
 - **Start**: `streamlit run app.py` on `$PORT`, with health check `/_stcore/health`.
 
 Memory was profiled for Render's 512 MB instance:
-- The app peaks at about 310 MB on macOS after visiting every page in both themes. It started at 540 MB.
+- The app peaks at about 310 MB on macOS after visiting every page in both themes (it started at 540 MB),
+  and at about 370 MB on the live Render instance.
 - Most of the saving came from calculations copying only the columns they need, integer-code basket
   counting, numpy bincounts for the landing-page metrics, and the memory-mapped Arrow load.
 - `MALLOC_ARENA_MAX=2` stops glibc from growing a memory arena per session thread.
