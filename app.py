@@ -20,6 +20,8 @@ PAGES = [
     st.Page("views/cohorts.py", title="Cohort retention", icon=":material/grid_on:"),
     st.Page("views/basket.py", title="Market basket", icon=":material/shopping_basket:"),
     st.Page("views/returns.py", title="Returns & cancellations", icon=":material/assignment_return:"),
+    st.Page("views/predictions.py", title="Predictions", icon=":material/insights:"),
+    st.Page("views/sql.py", title="SQL queries", icon=":material/code:"),
 ]
 page = st.navigation(PAGES)
 

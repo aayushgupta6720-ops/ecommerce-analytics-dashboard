@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import ctypes
 import gc
+import json
 import sys
+import time
 from datetime import date, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.feather as feather
 import streamlit as st
 
@@ -23,6 +26,10 @@ DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "processed" / "transa
 # Uncompressed Arrow copy made at build time (scripts/build_dataset.py --feather-only). Memory-mapping
 # it costs about half the RAM of decoding the zstd Parquet, which matters on a 512MB instance.
 FEATHER_PATH = DATA_PATH.with_suffix(".feather")
+
+# Arrow's default pool (mimalloc/jemalloc) keeps freed memory reserved; the system allocator lets
+# _release_freed_memory() hand it back, which matters on the 512MB Render instance.
+pa.set_memory_pool(pa.system_memory_pool())
 
 
 class Filters(NamedTuple):
@@ -48,7 +55,7 @@ def load_data() -> pd.DataFrame:
 
 
 def _release_freed_memory() -> None:
-    """Hand decode buffers back to the OS; glibc otherwise keeps them for reuse."""
+    """Hand freed memory back to the OS; glibc otherwise keeps it as a high-water mark."""
     gc.collect()
     if sys.platform.startswith("linux"):
         try:
@@ -75,7 +82,9 @@ def filtered(f: Filters) -> pd.DataFrame:
 @st.cache_data(max_entries=256, show_spinner=False)
 def compute(metric: str, f: Filters, **params):
     """Run `retail.metrics.<metric>` on the filtered frame; results are cached per filter + params."""
-    return getattr(metrics, metric)(filtered(f), **params)
+    result = getattr(metrics, metric)(filtered(f), **params)
+    _release_freed_memory()  # only runs on a cache miss, after the big temporaries are freed
+    return result
 
 
 @st.cache_data(show_spinner=False)
@@ -85,11 +94,44 @@ def acquisition_months() -> pd.Series:
 
 @st.cache_data(max_entries=64, show_spinner=False)
 def cohorts(f: Filters) -> pd.DataFrame:
-    return metrics.cohort_table(filtered(f), acquisition_months())
+    result = metrics.cohort_table(filtered(f), acquisition_months())
+    _release_freed_memory()
+    return result
 
 
 def rfm(f: Filters) -> pd.DataFrame:
     return compute("rfm", f, snapshot=f.end + timedelta(days=1))
+
+
+MODELS_DIR = DATA_PATH.parent / "models"  # written by scripts/train_models.py
+
+
+@st.cache_data(show_spinner=False)
+def model_metrics() -> dict:
+    return json.loads((MODELS_DIR / "metrics.json").read_text())
+
+
+@st.cache_data(show_spinner=False)
+def model_table(name: str) -> pd.DataFrame:
+    return pd.read_parquet(MODELS_DIR / f"{name}.parquet")
+
+
+@st.cache_resource(show_spinner=False)
+def duck():
+    """One DuckDB connection per process; each query uses its own cursor (safe across session threads)."""
+    from retail import sql
+    return sql.connect(DATA_PATH)
+
+
+@st.cache_data(max_entries=64, show_spinner=False)
+def sql_query(name: str, f: Filters) -> tuple[pd.DataFrame, float]:
+    """Run sql/<name>.sql for these filters; returns the result and how long DuckDB took (ms)."""
+    from retail import sql
+    started = time.perf_counter()
+    result = sql.run(duck().cursor(), name, f.start, f.end, f.countries)
+    elapsed = (time.perf_counter() - started) * 1000
+    _release_freed_memory()
+    return result, elapsed
 
 
 def kpis_with_deltas(f: Filters) -> tuple[dict, dict, Filters | None]:

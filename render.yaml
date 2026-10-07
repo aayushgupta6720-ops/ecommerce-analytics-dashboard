@@ -15,3 +15,7 @@ services:
       # from growing per thread on the 512MB free instance.
       - key: MALLOC_ARENA_MAX
         value: "2"
+      # Allocate large arrays (1M-row temporaries) with mmap so they go back to the OS as soon as
+      # they're freed, instead of raising the heap's high-water mark.
+      - key: MALLOC_MMAP_THRESHOLD_
+        value: "131072"

@@ -20,14 +20,14 @@ FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 TOKENS = {
     "light": {
         "surface": "#fcfcfb", "text": "#0b0b0b", "text2": "#52514e", "muted": "#898781",
-        "grid": "#e1e0d9", "axis": "#c3c2b7", "dim": "#d6d5ce",
+        "grid": "#e1e0d9", "axis": "#c3c2b7", "dim": "#d6d5ce", "neg": "#2a78d6", "pos": "#e34948",
         "series": ["#2a78d6", "#eb6834", "#1baf7a"],
         # blue ramp 100 -> 700: near-zero recedes toward the light surface
         "seq": ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"],
     },
     "dark": {
         "surface": "#1a1a19", "text": "#ffffff", "text2": "#c3c2b7", "muted": "#898781",
-        "grid": "#2c2c2a", "axis": "#383835", "dim": "#3d3d3a",
+        "grid": "#2c2c2a", "axis": "#383835", "dim": "#3d3d3a", "neg": "#3987e5", "pos": "#e66767",
         "series": ["#3987e5", "#d95926", "#199e70"],
         # same ramp reversed: near-zero recedes toward the dark surface
         "seq": ["#0d366b", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"],
@@ -328,6 +328,77 @@ def pareto_curve(p: pd.DataFrame, point: float, *, title: str) -> go.Figure:
                        xanchor="left", xshift=10, yshift=-12, font=dict(size=12, color=t["text2"]))
     fig.update_xaxes(tickformat=".0%", title_text="Share of products (ranked by revenue)", range=[0, 1])
     fig.update_yaxes(tickformat=".0%", title_text="Cumulative share of revenue", range=[0, 1.02])
+    return fig
+
+
+def multi_line(x, series: dict[str, pd.Series], *, title: str, xtitle: str = "", ytitle: str = "",
+               yfmt: str = "~s", yprefix: str = "", xfmt: str | None = None, ink: str | None = None,
+               diagonal: bool = False, shade: tuple | None = None, height: int = 380, hover_fmt=money) -> go.Figure:
+    """Several series on one axis. `ink` names the series drawn in neutral ink (e.g. actuals); the rest take
+    categorical slots in order. `shade` = (x0, x1, label) marks a region such as an unseen test period."""
+    t = tok()
+    fig = go.Figure()
+    if shade:
+        fig.add_vrect(x0=shade[0], x1=shade[1], fillcolor=t["grid"], opacity=0.5, line_width=0, layer="below")
+        fig.add_annotation(x=shade[0], y=1, yref="paper", text=shade[2], showarrow=False, xanchor="left", xshift=6,
+                           yshift=-4, yanchor="top", font=dict(size=11, color=t["muted"]))
+    if diagonal:
+        fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1, line=dict(color=t["axis"], width=1))
+    slot = 0
+    for name, values in series.items():
+        if name == ink:
+            color = t["text"]
+        else:
+            color = t["series"][slot % len(t["series"])]
+            slot += 1
+        fig.add_trace(go.Scatter(
+            x=x, y=values, name=name, mode="lines", line=dict(color=color, width=2),
+            hovertext=[f"{name}: {hover_fmt(v)}" if pd.notna(v) else "" for v in values],
+            hovertemplate="%{hovertext}<extra></extra>", connectgaps=False,
+        ))
+    fig = _layout(fig, title=title, height=height, legend=True)
+    fig.update_xaxes(title_text=xtitle, tickformat=xfmt)
+    fig.update_yaxes(title_text=ytitle, tickformat=yfmt, tickprefix=yprefix, rangemode="tozero")
+    fig.update_layout(hovermode="x unified" if not diagonal else "closest")
+    return fig
+
+
+def grouped_columns(x, series: dict[str, pd.Series], *, title: str, fmt=money, yfmt: str = "~s", yprefix: str = "",
+                    xtitle: str = "", height: int = 340) -> go.Figure:
+    """Two or three measures in the SAME unit side by side per category (e.g. predicted vs actual)."""
+    t = tok()
+    fig = go.Figure()
+    for i, (name, values) in enumerate(series.items()):
+        fig.add_trace(go.Bar(
+            x=x, y=values, name=name, marker=dict(color=t["series"][i], cornerradius=4),
+            hovertext=[f"{lab} · {name}: {fmt(v)}" for lab, v in zip(x, values)],
+            hovertemplate="%{hovertext}<extra></extra>",
+        ))
+    fig = _layout(fig, title=title, height=height, legend=True)
+    fig.update_layout(barmode="group", bargap=0.3, bargroupgap=0.08)
+    fig.update_xaxes(title_text=xtitle, type="category")
+    fig.update_yaxes(tickformat=yfmt, tickprefix=yprefix)
+    return fig
+
+
+def signed_bars_h(labels: pd.Series, values: pd.Series, *, title: str, neg_label: str, pos_label: str,
+                  fmt=lambda v: f"{v:+.2f}") -> go.Figure:
+    """Diverging bars around zero: blue for one direction, red for the other, sorted by size."""
+    t = tok()
+    order = values.abs().sort_values().index
+    labels, values = labels.loc[order], values.loc[order]
+    fig = go.Figure(go.Bar(
+        x=values, y=labels, orientation="h",
+        marker=dict(color=[t["pos"] if v > 0 else t["neg"] for v in values], cornerradius=4),
+        text=[fmt(v) for v in values], textposition="outside", cliponaxis=False,
+        textfont=dict(color=t["text2"], size=12),
+        hovertext=[f"{lab}: {fmt(v)} ({pos_label if v > 0 else neg_label})" for lab, v in zip(labels, values)],
+        hovertemplate="%{hovertext}<extra></extra>",
+    ))
+    fig = _layout(fig, title=title, height=max(200, 30 * len(labels) + 80))
+    span = float(values.abs().max() or 1) * 1.35
+    fig.update_xaxes(range=[-span, span], zeroline=True, zerolinecolor=t["axis"], showgrid=True, showline=False)
+    fig.update_yaxes(showgrid=False, tickfont=dict(color=t["text2"]))
     return fig
 
 

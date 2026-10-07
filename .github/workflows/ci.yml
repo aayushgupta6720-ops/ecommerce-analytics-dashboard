@@ -35,5 +35,9 @@ jobs:
       - name: Validate the Power BI project against Microsoft's schemas
         run: python scripts/validate_pbip.py
 
+      # The committed model results must be reproducible from the code and data.
+      - name: Model metrics are reproducible
+        run: python scripts/train_models.py --check
+
       - name: Tests
         run: pytest -q

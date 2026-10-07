@@ -13,7 +13,7 @@ which sleeps after 15 minutes idle, so the first visit can take about a minute t
 
 ## What's in it
 
-Seven pages. Every page responds to the sidebar filters: period, countries, and *Exclude United Kingdom*.
+Nine pages. The seven analysis pages respond to the sidebar filters (period, countries, *Exclude United Kingdom*); the SQL page runs its queries with those filters too.
 
 | Page | What it answers |
 |---|---|
@@ -24,6 +24,8 @@ Seven pages. Every page responds to the sidebar filters: period, countries, and 
 | **Cohort retention** | Monthly acquisition cohorts × months since first order: retention %, active customers or revenue. |
 | **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. |
 | **Returns & cancellations** | Cancellation rate over time, largest single cancellations, most-cancelled products, and cancellations by country and by customer. |
+| **Predictions** | Revenue forecast, churn risk and customer lifetime value, each trained on 2010 and scored on the following year against a baseline. |
+| **SQL queries** | The core metrics (KPIs, monthly revenue, products, RFM, cohorts) as SQL, run live by DuckDB on the Parquet file. |
 
 | Customers (RFM), dark theme | Market basket |
 |---|---|
@@ -94,6 +96,39 @@ code, unit-tested on hand-computed fixtures.
   matrix that apriori libraries build.
 - The **last month is partial** (the data ends on 9 Dec 2011). Trend charts mark it with a hollow point.
 
+## Predictions
+
+Each model is trained on data up to 9 Dec 2010 and scored on the following 365 days, which it never saw,
+against a simple baseline. The models are implemented with numpy/scipy in [`retail/models.py`](retail/models.py),
+so the 512 MB server needs no ML framework; `scripts/train_models.py` fits them and writes the results the page
+reads, and CI checks those results are reproducible.
+
+| Model | Result on the holdout year | Baseline |
+|---|---|---|
+| **Revenue forecast**, 12 months ahead | Same month last year misses by **8.4%** (WAPE) | 3-month average 48.7%, last month 80.0% |
+| **Churn** (no purchase in the next 90 days), logistic regression | AUC **0.759**; 77% of the riskiest 20% churned (base rate 49%) | "Longest since last order": AUC 0.707 |
+| **Customer lifetime value**, BG/NBD + Gamma-Gamma | Purchase error 2.36 per customer; revenue ranking (Spearman) 0.588 | Calibration-year rate 2.63; last year's spend 0.618 |
+
+What the evaluation showed, and the page says plainly:
+- **Seasonality dominates.** With one earlier year to learn from, "same month last year" is the honest benchmark.
+- **Churn rates swing with the season.** About 42% of customers lapse in the 90 days after a September cutoff,
+  against 63–69% after December–June cutoffs. So the churn model trains on the same season a year earlier: it
+  ranks customers well, but its probabilities need re-basing each season.
+- **The lifetime-value model is for ranking, not totals.** It cuts purchase-count error for customers with little
+  history (2.47 vs 3.14), ranks about as well as last year's spend, and over-predicts total purchases by
+  42%.
+  BG/NBD also gives every one-time buyer P(alive) = 1, so expected purchases is used for ranking instead.
+- Both statistical models are tested by **parameter recovery**: simulate customers from known parameters, fit,
+  and check the fit recovers them and predicts the simulated future.
+
+## SQL
+
+The metrics are also written as SQL in [`sql/`](sql/), and DuckDB runs them directly on the Parquet file:
+KPIs, monthly revenue, product summary, RFM scoring (including rank-based quintiles) and cohorts.
+[`tests/test_sql.py`](tests/test_sql.py) checks that every query returns exactly what the pandas version returns,
+row by row, across six filter combinations, one of which is empty. The SQL page shows each query and runs it live
+for the current filters.
+
 ## Project layout
 
 ```
@@ -103,9 +138,12 @@ retail/metrics.py      all calculations (pure pandas, tested)
 retail/data.py         Streamlit caching layer: one shared DataFrame, aggregates cached per filter
 retail/charts.py       Plotly builders sharing one palette in light and dark themes
 retail/countries.py    country names -> ISO-3 codes and regions
-scripts/               dataset build, Power BI export, PBIP generator + validator
+retail/models.py       BG/NBD, Gamma-Gamma, logistic regression, forecast baselines, evaluation helpers
+retail/sql.py          runs sql/*.sql with DuckDB on the Parquet file
+sql/                   the metrics as SQL (KPIs, monthly revenue, products, RFM, cohorts)
+scripts/               dataset build, model training, Power BI export, PBIP generator + validator
 powerbi/               Power BI kit (see powerbi/BUILD_GUIDE.md)
-tests/                 metrics, page smoke tests (Streamlit AppTest), Power BI export checks
+tests/                 metrics, SQL-vs-pandas equivalence, models, page smoke tests, Power BI export checks
 ```
 
 ## Power BI
@@ -151,13 +189,17 @@ GitHub Actions runs the same checks on every push and pull request (`.github/wor
 2. Regenerate the Power BI kit and fail if the committed measures, project files or tie-out numbers
    no longer match the app's code.
 3. Validate the Power BI project against Microsoft's published schemas.
-4. Run the full test suite.
+4. Re-train the models and fail if their metrics differ from the committed results.
+5. Run the full test suite.
 
 The tests cover:
 - **Metrics:** hand-worked fixtures covering KPIs, deltas, partial months, Pareto, RFM scoring and
   segments, cohorts (including the filter-relabelling case), basket support/confidence/lift, and returns.
 - **App:** every page rendered with default filters, a narrow filter (Portugal, one quarter) and an empty
   one (Iceland on a Saturday).
+- **SQL:** each query equals its pandas counterpart, row by row, across six filter combinations.
+- **Models:** parameter recovery on simulated customers for BG/NBD and Gamma-Gamma, coefficient recovery for
+  the logistic regression, AUC against a brute-force count, and hand-checked dataset builders.
 - **Power BI export:** foreign-key integrity, column order vs the model, totals equal to the app's KPIs,
   the workbook round-trip, and PBIP validation.
 
