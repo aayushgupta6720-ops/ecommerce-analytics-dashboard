@@ -1,0 +1,53 @@
+// Power BI Desktop: DAX query view > paste all of this > Run.
+// Check the result against the tie-out table in BUILD_GUIDE.md, then click
+// "Update model with changes" to add all measures to the model in one go.
+DEFINE
+    MEASURE fact_sales[Revenue] =
+        CALCULATE(SUM(fact_sales[revenue]), fact_sales[is_cancellation] = FALSE())
+    MEASURE fact_sales[Orders] =
+        CALCULATE(DISTINCTCOUNT(fact_sales[invoice]), fact_sales[is_cancellation] = FALSE())
+    MEASURE fact_sales[Customers] =
+        CALCULATE(DISTINCTCOUNTNOBLANK(fact_sales[customer_id]), fact_sales[is_cancellation] = FALSE())
+    MEASURE fact_sales[Avg Order Value] =
+        DIVIDE([Revenue], [Orders])
+    MEASURE fact_sales[Units] =
+        CALCULATE(SUM(fact_sales[quantity]), fact_sales[is_cancellation] = FALSE())
+    MEASURE fact_sales[Country Revenue Share] =
+        DIVIDE([Revenue], CALCULATE([Revenue], ALLSELECTED(dim_country[country])))
+    MEASURE fact_sales[Revenue PY] =
+        CALCULATE([Revenue], SAMEPERIODLASTYEAR(dim_date[date]))
+    MEASURE fact_sales[Revenue YoY %] =
+        VAR py = [Revenue PY]
+        RETURN IF(NOT ISBLANK(py), DIVIDE([Revenue] - py, py))
+    MEASURE fact_sales[Pareto Cumulative %] =
+        VAR thisRevenue = [Revenue]
+        VAR ranked = ADDCOLUMNS(ALLSELECTED(dim_product[stock_code]), "@rev", [Revenue])
+        VAR running = SUMX(FILTER(ranked, [@rev] >= thisRevenue), [@rev])
+        RETURN DIVIDE(running, SUMX(ranked, [@rev]))
+    MEASURE fact_sales[Cancelled Value] =
+        CALCULATE(-SUM(fact_sales[revenue]), fact_sales[is_cancellation] = TRUE())
+    MEASURE fact_sales[Cancellation Rate] =
+        DIVIDE([Cancelled Value], [Revenue])
+    MEASURE fact_sales[Net Revenue] =
+        [Revenue] - [Cancelled Value]
+    MEASURE fact_sales[Units Cancelled] =
+        CALCULATE(-SUM(fact_sales[quantity]), fact_sales[is_cancellation] = TRUE())
+    MEASURE dim_customer[Segment Customers] =
+        COUNTROWS(FILTER(dim_customer, NOT ISBLANK(dim_customer[segment])))
+    MEASURE dim_customer[Segment Revenue] =
+        SUM(dim_customer[monetary])
+    MEASURE dim_customer[Segment Customer Share] =
+        DIVIDE([Segment Customers], CALCULATE([Segment Customers], ALL(dim_customer[segment], dim_customer[segment_order])))
+    MEASURE dim_customer[Segment Revenue Share] =
+        DIVIDE([Segment Revenue], CALCULATE([Segment Revenue], ALL(dim_customer[segment], dim_customer[segment_order])))
+    MEASURE cohort_retention[Retention %] =
+        DIVIDE(SUM(cohort_retention[customers]), SUM(cohort_retention[cohort_size]))
+
+EVALUATE
+UNION(
+    ROW("Slice", "All data", "Revenue", [Revenue], "Orders", [Orders], "Customers", [Customers], "Avg Order Value", [Avg Order Value], "Cancellation Rate", [Cancellation Rate]),
+    CALCULATETABLE(ROW("Slice", "Calendar 2011", "Revenue", [Revenue], "Orders", [Orders], "Customers", [Customers], "Avg Order Value", [Avg Order Value], "Cancellation Rate", [Cancellation Rate]), dim_date[year] = 2011),
+    CALCULATETABLE(ROW("Slice", "France, all dates", "Revenue", [Revenue], "Orders", [Orders], "Customers", [Customers], "Avg Order Value", [Avg Order Value], "Cancellation Rate", [Cancellation Rate]), dim_country[country] = "France"),
+    CALCULATETABLE(ROW("Slice", "Germany, Q1 2011", "Revenue", [Revenue], "Orders", [Orders], "Customers", [Customers], "Avg Order Value", [Avg Order Value], "Cancellation Rate", [Cancellation Rate]), dim_country[country] = "Germany",
+        DATESBETWEEN(dim_date[date], DATE(2011, 1, 1), DATE(2011, 3, 31)))
+)

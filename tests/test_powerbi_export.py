@@ -92,4 +92,28 @@ def test_workbook_round_trips(frames):
                 assert got == pytest.approx(want), (name, col)
             else:
                 assert got == want, (name, col, got, want)
-    assert wb["fact_sales"].max_row == len(frames["fact_sales"]) + 1
+
+
+@pytest.mark.skipif(not (ROOT / "powerbi" / "data" / "RetailAnalytics.xlsx").exists(), reason="workbook not exported")
+def test_workbook_sheets_are_excel_tables(frames):
+    """The Power BI service only imports data formatted as Excel tables; names must match the model."""
+    import re
+    import zipfile
+    from openpyxl.utils import get_column_letter
+    # Read the table definitions straight from the xlsx; loading 1M rows through openpyxl is slow.
+    with zipfile.ZipFile(ROOT / "powerbi" / "data" / "RetailAnalytics.xlsx") as z:
+        tables = {}
+        for n in z.namelist():
+            if n.startswith("xl/tables/"):
+                xml = z.read(n).decode()
+                tables[re.search(r'displayName="([^"]+)"', xml).group(1)] = re.search(r' ref="([^"]+)"', xml).group(1)
+    for name, frame in frames.items():
+        assert tables.get(name) == f"A1:{get_column_letter(frame.shape[1])}{len(frame) + 1}", name
+
+
+@pytest.mark.skipif(not (ROOT / "powerbi" / "measures_query.dax").exists(), reason="run export_powerbi.py first")
+def test_measures_query_defines_every_measure():
+    q = (ROOT / "powerbi" / "measures_query.dax").read_text()
+    for m in ex.MEASURES:
+        assert f"MEASURE {m.table}[{m.name}] =" in q, m.name
+    assert q.count("EVALUATE") == 1 and q.count("ROW(") == 4

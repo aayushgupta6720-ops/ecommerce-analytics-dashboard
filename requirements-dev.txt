@@ -1,8 +1,7 @@
 -r requirements.txt
 # Rebuilding the dataset from the UCI xlsx
 openpyxl==3.1.5
-# Power BI export and PBIP validation
-xlsxwriter==3.2.9
+# Power BI export (openpyxl above writes the workbook) and PBIP validation
 jsonschema==4.26.0
 referencing==0.37.0
 # Tests and screenshots

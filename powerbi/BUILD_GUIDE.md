@@ -9,6 +9,8 @@ the two should show identical numbers. The [tie-out table](#tie-out-numbers) let
 | `data/RetailAnalytics.xlsx` | All tables as sheets. Upload this in the browser (route A). |
 | `data/*.csv` | Same tables, one CSV each. The PBIP project loads these (route B). |
 | `measures.dax` | Every measure with its format and home table, ready to paste. |
+| `measures_query.dax` | Power BI Desktop: creates all 18 measures at once in DAX query view and prints the tie-out numbers. |
+| `DESKTOP_GUIDE.md` | Step-by-step build in **Power BI Desktop on Windows** (easiest route; no license needed). |
 | `RetailAnalytics.pbip` + `.SemanticModel/` + `.Report/` | Generated Power BI Project (route B, **untested**). |
 
 ## The model
@@ -42,8 +44,12 @@ This route needs a work or school account; personal Gmail/Outlook accounts can't
 
 1. **Create the semantic model.** Go to app.powerbi.com, open *My workspace*, and upload
    `data/RetailAnalytics.xlsx` as a new semantic model. Microsoft renames these menus often, so look
-   for *New item → Semantic model* or *Upload → Browse*. Each sheet becomes a table. The workbook is
-   about 40 MB and 1M rows, so the upload takes a minute or two.
+   for *New item → Semantic model* or *Upload → Browse*. Each sheet is formatted as an Excel table named
+   after it (`fact_sales`, `dim_date`, ...), and those names become the model's table names that the
+   measures refer to. The workbook is about 40 MB and 1M rows, so the upload takes a minute or two.
+   - The service only imports data formatted as Excel tables. If it says it *couldn't find any data
+     formatted as a table*, the workbook is from an older export; run `python scripts/export_powerbi.py`
+     again.
    - If your tenant only offers Excel through OneDrive/SharePoint, put the workbook in OneDrive first
      and pick it from there.
 2. **Open the model editor.** On the semantic model, choose *Open data model*. If that option is greyed

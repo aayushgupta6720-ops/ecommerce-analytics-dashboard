@@ -4,12 +4,13 @@ Writes to powerbi/:
   data/*.csv                 one file per table (the PBIP semantic model loads these)
   data/RetailAnalytics.xlsx  every table as a sheet, for "upload a file" in the Power BI service
   measures.dax               every measure, ready to paste into the browser's model editor
+  measures_query.dax         Desktop DAX query view: defines all measures at once + tie-out query
   RetailAnalytics.pbip + .SemanticModel/ + .Report/   Power BI Project (generated, see scripts/pbip.py)
   BUILD_GUIDE.md             the tie-out section is refreshed with numbers computed here
 
 Usage:
     python scripts/export_powerbi.py            # everything
-    python scripts/export_powerbi.py --no-xlsx  # skip the slow Excel workbook (~2-4 min)
+    python scripts/export_powerbi.py --no-xlsx  # skip the slow Excel workbook (a few minutes)
 
 All derived tables come from retail/metrics.py, so Power BI and the Streamlit app agree.
 """
@@ -19,6 +20,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -328,45 +330,47 @@ def write_csvs(frames: dict[str, pd.DataFrame]) -> None:
 
 
 def write_excel(frames: dict[str, pd.DataFrame]) -> Path:
-    """One sheet per table, written row by row.
+    """One sheet per table, each formatted as an Excel table named after it.
 
-    xlsxwriter's constant_memory mode keeps RAM flat for the 1M-row fact sheet, but it only
-    accepts writes in row order, and pandas.to_excel writes column by column (which silently
-    drops every column after the first). So cells are written here directly.
+    The Power BI service only imports ranges formatted as Excel tables ("We couldn't find any data
+    formatted as a table" otherwise), and the table names become the model's table names, which
+    the DAX measures refer to. openpyxl's write-only mode streams rows (flat RAM for the 1M-row fact
+    sheet) and, unlike xlsxwriter's constant_memory mode, still supports tables.
     """
-    import xlsxwriter
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.table import Table as XlTable, TableColumn, TableStyleInfo
 
     path = DATA / "RetailAnalytics.xlsx"
     if len(frames["fact_sales"]) > EXCEL_MAX_ROWS:
         raise SystemExit(f"fact_sales has {len(frames['fact_sales']):,} rows; an Excel sheet holds {EXCEL_MAX_ROWS:,}.")
-    wb = xlsxwriter.Workbook(path, {"constant_memory": True, "strings_to_numbers": False,
-                                    "strings_to_urls": False, "strings_to_formulas": False})
-    date_fmt = wb.add_format({"num_format": "yyyy-mm-dd"})
+    wb = Workbook(write_only=True)
     for name, frame in frames.items():
-        ws = wb.add_worksheet(name)
-        ws.write_row(0, 0, list(frame.columns))
-        writers = []
+        ws = wb.create_sheet(name)
+        cols = list(frame.columns)
+        ref = f"A1:{get_column_letter(len(cols))}{len(frame) + 1}"
+        table = XlTable(displayName=name, ref=ref,
+                        tableStyleInfo=TableStyleInfo(name="TableStyleLight1", showRowStripes=True))
+        table.tableColumns = [TableColumn(id=i + 1, name=c) for i, c in enumerate(cols)]
+        with warnings.catch_warnings():  # openpyxl warns in write-only mode even when columns are set
+            warnings.simplefilter("ignore", UserWarning)
+            ws.add_table(table)
+        ws.append(cols)
         values = []
-        for col in frame.columns:
+        for col in cols:
             series = frame[col]
             if pd.api.types.is_datetime64_any_dtype(series):
-                writers.append(lambda r, c, v: ws.write_datetime(r, c, v, date_fmt))
-                values.append([None if pd.isna(v) else v.to_pydatetime() for v in series])
+                values.append([None if pd.isna(v) else v.date() for v in series])  # dates, not datetimes
             elif pd.api.types.is_bool_dtype(series):
-                writers.append(ws.write_boolean)
                 values.append(series.tolist())
             elif pd.api.types.is_numeric_dtype(series):
-                writers.append(ws.write_number)
                 values.append([None if pd.isna(v) else v for v in series.astype(object)])
             else:
-                writers.append(ws.write_string)  # codes like 489434 / 85123A must stay text
-                values.append([None if pd.isna(v) else str(v) for v in series])
-        for r, row in enumerate(zip(*values), start=1):
-            for c, v in enumerate(row):
-                if v is not None:
-                    writers[c](r, c, v)
-        print(f"  sheet {name}: {len(frame):,} rows")
-    wb.close()
+                values.append([None if pd.isna(v) else str(v) for v in series])  # codes like 489434 stay text
+        for row in zip(*values):
+            ws.append(row)
+        print(f"  sheet + table {name}: {len(frame):,} rows ({ref})")
+    wb.save(path)
     print(f"  {path.relative_to(ROOT)} ({path.stat().st_size / 1e6:.1f} MB)")
     return path
 
@@ -383,6 +387,34 @@ def write_measures_dax() -> None:
             lines.append(f"{m.name} =\n    {body}\n")
     (PBI / "measures.dax").write_text("\n".join(lines))
     print(f"  measures.dax  {len(MEASURES)} measures")
+
+
+def write_measures_query() -> None:
+    """DAX query for Power BI Desktop's DAX query view: defines every measure, then returns the tie-out
+    KPIs. Run it, compare with BUILD_GUIDE.md, then click "Update model with changes" to add the measures."""
+    kpis = ('"Revenue", [Revenue], "Orders", [Orders], "Customers", [Customers], '
+            '"Avg Order Value", [Avg Order Value], "Cancellation Rate", [Cancellation Rate]')
+    lines = ["// Power BI Desktop: DAX query view > paste all of this > Run.",
+             "// Check the result against the tie-out table in BUILD_GUIDE.md, then click",
+             "// \"Update model with changes\" to add all measures to the model in one go.",
+             "DEFINE"]
+    for m in MEASURES:
+        body = m.expression.replace("\n", "\n        ")
+        lines.append(f"    MEASURE {m.table}[{m.name}] =\n        {body}")
+    lines += [
+        "",
+        "EVALUATE",
+        "UNION(",
+        f'    ROW("Slice", "All data", {kpis}),',
+        f'    CALCULATETABLE(ROW("Slice", "Calendar 2011", {kpis}), dim_date[year] = 2011),',
+        f'    CALCULATETABLE(ROW("Slice", "France, all dates", {kpis}), dim_country[country] = "France"),',
+        f'    CALCULATETABLE(ROW("Slice", "Germany, Q1 2011", {kpis}), dim_country[country] = "Germany",',
+        "        DATESBETWEEN(dim_date[date], DATE(2011, 1, 1), DATE(2011, 3, 31)))",
+        ")",
+        "",
+    ]
+    (PBI / "measures_query.dax").write_text("\n".join(lines))
+    print(f"  measures_query.dax  {len(MEASURES)} measures + tie-out query")
 
 
 def tieout(df: pd.DataFrame) -> str:
@@ -439,6 +471,7 @@ def main() -> None:
         print("Excel workbook (slow)")
         write_excel(frames)
     write_measures_dax()
+    write_measures_query()
 
     import pbip  # scripts/pbip.py
     tables = model_tables()
