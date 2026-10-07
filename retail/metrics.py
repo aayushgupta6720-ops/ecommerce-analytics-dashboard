@@ -6,9 +6,13 @@ usually already narrowed by `filter_frame`, and returns a small aggregate.
 Definitions used throughout:
 - sales rows: product lines that are not cancellations (the ETL already dropped price <= 0
   and negative-quantity non-cancellations, so quantity and price are positive here)
-- revenue: gross sales on sales rows, quantity * price, in GBP
-- orders: distinct sales invoices
-- cancellations: product lines on 'C' invoices; their revenue is negative
+- cancellations: product lines on 'C' invoices; their quantity and revenue are negative
+- revenue: NET of cancellations, i.e. sales value plus the (negative) cancelled value in the
+  same slice. An order placed and then cancelled in full therefore nets to zero instead of
+  ranking as a top product or a big-spending customer.
+- gross sales: sales rows only; the base for the cancellation rate
+- units: net of cancelled units
+- orders, customers, recency, frequency: counted on sales rows (things that actually happened)
 """
 
 from __future__ import annotations
@@ -49,6 +53,12 @@ def cancel_rows(df: pd.DataFrame, cols: list[str] | None = None) -> pd.DataFrame
     return df.loc[mask, cols] if cols is not None else df[mask]
 
 
+def product_rows(df: pd.DataFrame, cols: list[str] | None = None) -> pd.DataFrame:
+    """Sales and cancellations together: summing their revenue gives net revenue."""
+    mask = df["is_product"].to_numpy()
+    return df.loc[mask, cols] if cols is not None else df[mask]
+
+
 def month_start(ts: pd.Series) -> pd.Series:
     # numpy month truncation; far cheaper than .dt.to_period("M") on a million rows
     return pd.Series(ts.to_numpy().astype("datetime64[M]").astype("datetime64[s]"), index=ts.index, name=ts.name)
@@ -68,20 +78,22 @@ def kpis(df: pd.DataFrame) -> dict[str, float]:
     is_cancel = df["is_cancellation"].to_numpy()
     sale, cancel = is_product & ~is_cancel, is_product & is_cancel
     revenue_col = df["revenue"].to_numpy()
-    revenue = float(revenue_col[sale].sum())
+    gross = float(revenue_col[sale].sum())
+    cancelled = float(-revenue_col[cancel].sum())
+    revenue = gross - cancelled
     orders = int(np.unique(_codes(df["invoice"])[sale]).size)
     customers = df["customer_id"]
     has_id = sale & customers.notna().to_numpy()
     n_customers = int(np.unique(customers.to_numpy(dtype="int64", na_value=-1)[has_id]).size)
-    cancelled = float(-revenue_col[cancel].sum())
     return {
         "revenue": revenue,
+        "gross_sales": gross,
         "orders": orders,
         "customers": n_customers,
         "aov": revenue / orders if orders else 0.0,
-        "units": int(df["quantity"].to_numpy()[sale].sum()),
+        "units": int(df["quantity"].to_numpy()[is_product].sum()),
         "cancelled_value": cancelled,
-        "cancel_rate": cancelled / revenue if revenue else 0.0,
+        "cancel_rate": cancelled / gross if gross else 0.0,
     }
 
 
@@ -114,15 +126,18 @@ def _partial_months(months: pd.Series, start: date, end: date) -> pd.Series:
 
 def monthly_revenue(df: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
     # numpy bincounts over month indices keep the peak small; this backs the landing-page chart.
-    sale = df["is_product"].to_numpy() & ~df["is_cancellation"].to_numpy()
+    product = df["is_product"].to_numpy()
+    sale = product & ~df["is_cancellation"].to_numpy()
     cols = ["month", "revenue", "orders", "customers", "partial", "year", "month_num"]
     if not sale.any():
         return pd.DataFrame(columns=cols)
-    months = df["invoice_date"].to_numpy()[sale].astype("datetime64[M]").astype(np.int64)
-    first = months.min()
-    idx = (months - first).astype(np.int64)
-    n = int(idx.max()) + 1
-    revenue = np.bincount(idx, weights=df["revenue"].to_numpy()[sale], minlength=n)
+    months_all = df["invoice_date"].to_numpy()[product].astype("datetime64[M]").astype(np.int64)
+    first = months_all.min()
+    idx_all = (months_all - first).astype(np.int64)
+    n = int(idx_all.max()) + 1
+    # Net revenue: cancellations count (negatively) in the month they were made.
+    revenue = np.bincount(idx_all, weights=df["revenue"].to_numpy()[product], minlength=n)
+    idx = idx_all[~df["is_cancellation"].to_numpy()[product]]
     # An invoice has a single timestamp, so each invoice's first line marks one order in one month.
     _, first_line = np.unique(_codes(df["invoice"])[sale], return_index=True)
     orders = np.bincount(idx[first_line], minlength=n)
@@ -135,7 +150,7 @@ def monthly_revenue(df: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
         "month": (np.arange(n) + first).astype("datetime64[M]").astype("datetime64[s]"),
         "revenue": revenue, "orders": orders, "customers": customers,
     })
-    out = out[out["orders"] > 0].reset_index(drop=True)
+    out = out[(out["orders"] > 0) | (out["revenue"] != 0)].reset_index(drop=True)
     out["partial"] = _partial_months(out["month"], start, end)
     out["year"] = out["month"].dt.year
     out["month_num"] = out["month"].dt.month
@@ -155,18 +170,14 @@ def weekday_hour(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------- products
 
 def product_summary(df: pd.DataFrame) -> pd.DataFrame:
-    s = sales_rows(df, ["stock_code", "description", "revenue", "quantity", "invoice", "customer_id"])
-    out = (
-        s.groupby("stock_code", observed=True)
-        .agg(
-            description=("description", "first"),
-            revenue=("revenue", "sum"),
-            units=("quantity", "sum"),
-            orders=("invoice", "nunique"),
-            customers=("customer_id", "nunique"),
-        )
-        .reset_index()
-    )
+    """Per product: net revenue and units (cancellations subtracted), orders and customers from sales."""
+    p = product_rows(df, ["stock_code", "description", "revenue", "quantity"])
+    money = p.groupby("stock_code", observed=True).agg(
+        description=("description", "first"), revenue=("revenue", "sum"), units=("quantity", "sum"))
+    s = sales_rows(df, ["stock_code", "invoice", "customer_id"])
+    counts = s.groupby("stock_code", observed=True).agg(
+        orders=("invoice", "nunique"), customers=("customer_id", "nunique"))
+    out = money.join(counts, how="inner").reset_index()  # products with at least one sale in the slice
     out["stock_code"] = out["stock_code"].astype(str)
     out["description"] = out["description"].astype(str)
     return out.sort_values("revenue", ascending=False, ignore_index=True)
@@ -177,8 +188,12 @@ def top_products(df: pd.DataFrame, by: str = "revenue", n: int = 10) -> pd.DataF
 
 
 def pareto(df: pd.DataFrame) -> pd.DataFrame:
-    """Products ranked by revenue with cumulative shares, for an 80/20 curve."""
+    """Products ranked by net revenue with cumulative shares, for an 80/20 curve.
+
+    Products whose sales were all cancelled (net revenue <= 0) earn nothing and are left out.
+    """
     p = product_summary(df)[["stock_code", "description", "revenue"]]
+    p = p[p["revenue"] > 0].reset_index(drop=True)
     total = p["revenue"].sum()
     p["product_share"] = np.arange(1, len(p) + 1) / len(p) if len(p) else []
     p["cum_revenue_share"] = p["revenue"].cumsum() / total if total else 0.0
@@ -196,8 +211,9 @@ def pareto_point(p: pd.DataFrame, revenue_share: float = 0.8) -> float:
 def product_detail(df: pd.DataFrame, stock_code: str) -> dict[str, pd.DataFrame]:
     one = df[df["stock_code"] == stock_code]
     s = sales_rows(one, ["invoice_date", "revenue", "quantity", "price", "invoice", "country"])
+    net = product_rows(one, ["invoice_date", "revenue", "quantity", "country"])
     monthly = (
-        s.assign(month=month_start(s["invoice_date"]))
+        net.assign(month=month_start(net["invoice_date"]))
         .groupby("month").agg(revenue=("revenue", "sum"), units=("quantity", "sum")).reset_index()
     )
     prices = (
@@ -205,7 +221,7 @@ def product_detail(df: pd.DataFrame, stock_code: str) -> dict[str, pd.DataFrame]
         .sort_values("price")
     )
     countries = (
-        s.groupby("country", observed=True).agg(revenue=("revenue", "sum"), units=("quantity", "sum"))
+        net.groupby("country", observed=True).agg(revenue=("revenue", "sum"), units=("quantity", "sum"))
         .reset_index().sort_values("revenue", ascending=False).head(10)
     )
     countries["country"] = countries["country"].astype(str)
@@ -215,12 +231,14 @@ def product_detail(df: pd.DataFrame, stock_code: str) -> dict[str, pd.DataFrame]
 # ---------------------------------------------------------------- geography
 
 def country_summary(df: pd.DataFrame) -> pd.DataFrame:
-    s = sales_rows(df, ["country", "revenue", "invoice", "customer_id"])
+    net = product_rows(df, ["country", "revenue"]).groupby("country", observed=True)["revenue"].sum()
+    s = sales_rows(df, ["country", "invoice", "customer_id"])
     out = (
         s.groupby("country", observed=True)
-        .agg(revenue=("revenue", "sum"), orders=("invoice", "nunique"), customers=("customer_id", "nunique"))
+        .agg(orders=("invoice", "nunique"), customers=("customer_id", "nunique"))
         .reset_index()
     )
+    out["revenue"] = out["country"].map(net).astype(float)
     out["country"] = out["country"].astype(str)
     out["aov"] = out["revenue"] / out["orders"]
     total = out["revenue"].sum()
@@ -257,9 +275,15 @@ def _quintile(values: pd.Series, ascending: bool = True) -> pd.Series:
 
 
 def rfm(df: pd.DataFrame, snapshot: date) -> pd.DataFrame:
-    """One row per identified customer: recency (days), frequency (orders), monetary (GBP), scores, segment."""
+    """One row per identified customer: recency (days), frequency (orders), monetary (net GBP), scores, segment.
+
+    Monetary is net of the customer's cancellations in the slice, so a cancelled bulk order doesn't
+    turn a small customer into a big spender.
+    """
     s = sales_rows(df, ["customer_id", "invoice_date", "invoice", "revenue", "country"])
     s = s[s["customer_id"].notna()]
+    c = cancel_rows(df, ["customer_id", "revenue"])
+    cancelled = c[c["customer_id"].notna()].groupby("customer_id")["revenue"].sum()
     out = (
         s.groupby("customer_id")
         .agg(
@@ -271,6 +295,7 @@ def rfm(df: pd.DataFrame, snapshot: date) -> pd.DataFrame:
         .reset_index()
         .sort_values("customer_id", ignore_index=True)
     )
+    out["monetary"] = out["monetary"] + out["customer_id"].map(cancelled).fillna(0.0).to_numpy()
     if out.empty:
         return out.assign(recency=[], r_score=[], f_score=[], m_score=[], segment=[])
     out["country"] = out["country"].astype(str)
@@ -319,14 +344,26 @@ def cohort_table(df: pd.DataFrame, acquired: pd.Series) -> pd.DataFrame:
     cols = ["cohort", "period", "customers", "revenue", "cohort_size", "retention"]
     if s.empty:
         return pd.DataFrame(columns=cols)
-    s = s.assign(month=month_start(s["invoice_date"]), cohort=s["customer_id"].map(acquired))
-    s = s[s["cohort"] >= s["month"].min()]
-    s["period"] = (s["month"].dt.year - s["cohort"].dt.year) * 12 + (s["month"].dt.month - s["cohort"].dt.month)
+    c = cancel_rows(df, ["customer_id", "invoice_date", "revenue"])
+    c = c[c["customer_id"].notna()]
+    window_start = month_start(s["invoice_date"]).min()
+
+    def with_period(frame: pd.DataFrame) -> pd.DataFrame:
+        frame = frame.assign(month=month_start(frame["invoice_date"]), cohort=frame["customer_id"].map(acquired))
+        frame = frame[frame["cohort"] >= window_start]
+        return frame.assign(period=(frame["month"].dt.year - frame["cohort"].dt.year) * 12
+                            + (frame["month"].dt.month - frame["cohort"].dt.month))
+
+    s, c = with_period(s), with_period(c)
     out = (
         s.groupby(["cohort", "period"])
         .agg(customers=("customer_id", "nunique"), revenue=("revenue", "sum"))
         .reset_index()
     )
+    # Active customers come from sales; revenue is net of the cohort's cancellations in that month.
+    cancelled = c.groupby(["cohort", "period"])["revenue"].sum()
+    keys = pd.MultiIndex.from_frame(out[["cohort", "period"]])
+    out["revenue"] = out["revenue"].to_numpy() + cancelled.reindex(keys).fillna(0.0).to_numpy()
     size = out[out["period"] == 0].set_index("cohort")["customers"]
     out["cohort_size"] = out["cohort"].map(size)
     out = out[out["cohort_size"].notna()]
@@ -388,7 +425,9 @@ def basket_rules(df: pd.DataFrame, min_support: float = 0.01, max_items: int = 1
     })
     out["antecedent_desc"] = out["antecedent"].map(desc)
     out["consequent_desc"] = out["consequent"].map(desc)
-    return out[cols].sort_values(["lift", "support"], ascending=False, ignore_index=True)
+    # Explicit tie-breaks: A->B and B->A share lift and support, and the order must not depend on platform.
+    return out[cols].sort_values(["lift", "support", "antecedent", "consequent"],
+                                 ascending=[False, False, True, True], ignore_index=True)
 
 
 # ---------------------------------------------------------------- returns & cancellations

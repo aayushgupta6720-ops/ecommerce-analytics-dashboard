@@ -6,7 +6,7 @@ from retail import data, metrics
 f = data.page_header(
     "Customers (RFM)",
     "Customers scored 1–5 on **R**ecency, **F**requency and **M**onetary value, then grouped into segments "
-    "by their R and F scores. Only customers with an ID are included.",
+    "by their R and F scores. Spend is net of cancellations. Only customers with an ID are included.",
 )
 r = data.rfm(f)
 if data.empty_state(r, "identified customers"):

@@ -2,10 +2,10 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
   "name": "re_card1",
   "position": {
-    "x": 437,
+    "x": 332,
     "y": 96,
     "z": 11,
-    "width": 405,
+    "width": 300,
     "height": 96,
     "tabOrder": 11
   },
@@ -23,11 +23,11 @@
                       "Entity": "fact_sales"
                     }
                   },
-                  "Property": "Cancellation Rate"
+                  "Property": "Cancelled Value"
                 }
               },
-              "queryRef": "fact_sales.Cancellation Rate",
-              "nativeQueryRef": "Cancellation Rate"
+              "queryRef": "fact_sales.Cancelled Value",
+              "nativeQueryRef": "Cancelled Value"
             }
           ]
         }
@@ -48,7 +48,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Cancellation rate'"
+                  "Value": "'Cancelled value'"
                 }
               }
             }

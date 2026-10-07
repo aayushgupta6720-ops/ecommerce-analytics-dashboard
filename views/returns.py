@@ -14,10 +14,11 @@ if data.empty_state(k, "sales"):
     st.stop()
 
 cancels = data.compute("country_returns", f)
-m1, m2, m3 = st.columns(3)
-m1.metric("Cancelled value", ch.money(k["cancelled_value"], 2), border=True)
-m2.metric("Cancellation rate", ch.pct(k["cancel_rate"]), border=True, help="Cancelled value ÷ gross product sales.")
-m3.metric("Revenue after cancellations", ch.money(k["revenue"] - k["cancelled_value"], 2), border=True)
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Gross sales", ch.money(k["gross_sales"], 2), border=True, help="Product sales before cancellations.")
+m2.metric("Cancelled value", ch.money(k["cancelled_value"], 2), border=True)
+m3.metric("Cancellation rate", ch.pct(k["cancel_rate"]), border=True, help="Cancelled value ÷ gross product sales.")
+m4.metric("Net revenue", ch.money(k["revenue"], 2), border=True, help="Gross sales minus cancelled value.")
 
 left, right = st.columns(2, gap="large")
 with left:

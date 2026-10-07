@@ -45,10 +45,12 @@ def test_fact_totals_equal_app_kpis(frames, source):
     k = metrics.kpis(source)
     fact = frames["fact_sales"]
     sales, cancels = fact[~fact["is_cancellation"]], fact[fact["is_cancellation"]]
-    assert sales["revenue"].sum() == pytest.approx(k["revenue"], abs=0.01)
+    # DAX [Revenue] = SUM(revenue) over every line (net); [Gross Sales] = sales lines only.
+    assert fact["revenue"].sum() == pytest.approx(k["revenue"], abs=0.01)
+    assert sales["revenue"].sum() == pytest.approx(k["gross_sales"], abs=0.01)
     assert sales["invoice"].nunique() == k["orders"]
     assert sales["customer_id"].nunique() == k["customers"]
-    assert sales["quantity"].sum() == k["units"]
+    assert fact["quantity"].sum() == k["units"]
     assert -cancels["revenue"].sum() == pytest.approx(k["cancelled_value"], abs=0.01)
 
 

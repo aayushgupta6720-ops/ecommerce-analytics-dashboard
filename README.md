@@ -18,7 +18,7 @@ Seven pages. Every page responds to the sidebar filters: period, countries, and 
 | **Overview** | Revenue, orders, customers, AOV, units and cancellation rate, with change vs the previous period. Monthly trend with a year-over-year view. Weekday × hour heatmap. Top countries. |
 | **Products** | Top N products by revenue, units or orders. Pareto curve (22% of products bring in 80% of revenue). Per-product drill-down: monthly sales, price points, countries. |
 | **Geography** | Choropleth, country table, highest average order values, revenue by region. |
-| **Customers (RFM)** | Recency/Frequency/Monetary scores and 10 segments. Customer share vs revenue share (Champions are 14% of customers and 51% of revenue). Every-customer scatter. CSV export. |
+| **Customers (RFM)** | Recency/Frequency/Monetary scores and 10 segments. Customer share vs revenue share (Champions are 14% of customers and 52% of revenue). Every-customer scatter. CSV export. |
 | **Cohort retention** | Monthly acquisition cohorts × months since first order: retention %, active customers or revenue. |
 | **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. |
 | **Returns & cancellations** | Cancellation rate over time, largest single cancellations, most-cancelled products, and cancellations by country and by customer. |
@@ -69,13 +69,16 @@ cleaned up (EIRE → Ireland, RSA → South Africa, USA → United States).
 All metrics live in [`retail/metrics.py`](retail/metrics.py): pure pandas functions with no Streamlit
 code, unit-tested on hand-computed fixtures.
 
-- **Revenue**: gross product sales, quantity × price in GBP, excluding cancellations and non-product lines.
-  **Orders**: distinct sales invoices. **AOV**: revenue ÷ orders.
+- **Revenue**: product sales **net of cancellations**, quantity × price in GBP, excluding non-product lines.
+  Cancelled lines carry negative revenue, so an order placed and then cancelled in full nets to zero. Before
+  this rule, one 80,995-unit order that was cancelled the same day ranked as the #4 product by revenue.
+  **Gross sales** (before cancellations) appear on the Returns page. **Orders**: distinct sales invoices.
+  **AOV**: net revenue ÷ orders. **Units** are net of cancelled units.
 - **Customers**: distinct customer IDs. About 23% of sales lines have no customer ID. They count towards
   revenue, products and countries, but not towards RFM or cohorts.
 - **Change vs previous period**: compared with the window of the same length just before the selected
   one. It's hidden when that window starts before the data does.
-- **Cancellation rate**: value of cancelled product lines ÷ gross product sales. Two orders placed and
+- **Cancellation rate**: value of cancelled product lines ÷ gross sales. Two orders placed and
   cancelled in full account for 34% of all cancelled value; the Returns page shows them.
 - **RFM**:
   - The snapshot date is the day after the selected period ends.

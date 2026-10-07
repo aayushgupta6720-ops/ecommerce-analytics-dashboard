@@ -17,12 +17,15 @@ def fmt_delta(key: str, points: bool = False) -> str | None:
 
 
 cols = st.columns(6)
-cols[0].metric("Revenue", ch.money(k["revenue"]), fmt_delta("revenue"), border=True)
+cols[0].metric("Net revenue", ch.money(k["revenue"]), fmt_delta("revenue"), border=True,
+               help=f"Product sales minus cancelled product lines. Gross sales: {ch.money(k['gross_sales'], 2)}.")
 cols[1].metric("Orders", f"{k['orders']:,}", fmt_delta("orders"), border=True)
 cols[2].metric("Customers", f"{k['customers']:,}", fmt_delta("customers"), border=True,
                help="Identified customers only; ~23% of sales lines have no customer ID.")
-cols[3].metric("Avg order value", f"£{k['aov']:,.0f}", fmt_delta("aov"), border=True)
-cols[4].metric("Units sold", ch.number(k["units"]), fmt_delta("units"), border=True)
+cols[3].metric("Avg order value", f"£{k['aov']:,.0f}", fmt_delta("aov"), border=True,
+               help="Net revenue ÷ orders.")
+cols[4].metric("Units (net)", ch.number(k["units"]), fmt_delta("units"), border=True,
+               help="Units sold minus units cancelled.")
 cols[5].metric("Cancel rate", ch.pct(k["cancel_rate"]), fmt_delta("cancel_rate", points=True),
                delta_color="inverse", border=True, help="Value of cancelled product lines ÷ gross product sales.")
 if prev:

@@ -123,7 +123,7 @@ Each page mirrors a Streamlit page. Field names are *table[column]*; measures ar
    - Table: `antecedent_desc`, `consequent_desc`, `pair_baskets`, `support`, `confidence`, `lift`,
      sorted by `lift` descending
 7. **Returns & cancellations**
-   - Cards: **Cancelled Value**, **Cancellation Rate**, **Net Revenue**
+   - Cards: **Gross Sales**, **Cancelled Value**, **Cancellation Rate**, **Revenue** (net)
    - Line chart: `dim_date[month_start]` by **Cancellation Rate**
    - Table from `product_returns`, sorted by `cancelled_value`
    - Two single orders cancelled in full (80,995 × Paper Craft Little Birdie on 9 Dec 2011 and
@@ -145,13 +145,13 @@ slicers, the Power BI cards should match exactly. Small differences in the last 
 <!-- TIEOUT:START -->
 | Slice | Revenue | Orders | Customers | Avg Order Value | Cancellation Rate |
 |---|---:|---:|---:|---:|---:|
-| All data | £19,642,692.15 | 39,516 | 5,852 | £497.08 | 3.65% |
-| Calendar 2011 | £9,471,248.64 | 18,223 | 4,214 | £519.74 | 4.84% |
-| France, all dates | £311,090.29 | 598 | 93 | £520.22 | 5.68% |
-| Germany, Q1 2011 | £36,984.58 | 81 | 41 | £456.60 | 3.40% |
+| All data | £18,926,266.18 | 39,516 | 5,852 | £478.95 | 3.65% |
+| Calendar 2011 | £9,012,895.34 | 18,223 | 4,214 | £494.59 | 4.84% |
+| France, all dates | £293,431.20 | 598 | 93 | £490.69 | 5.68% |
+| Germany, Q1 2011 | £35,726.69 | 81 | 41 | £441.07 | 3.40% |
 
-- **Top product by revenue:** REGENCY CAKESTAND 3 TIER (22423), £330,590.32
-- **Champions:** 826 customers, 51.32% of segmented revenue
+- **Top product by revenue:** REGENCY CAKESTAND 3 TIER (22423), £314,045.02
+- **Champions:** 826 customers, 52.27% of segmented revenue
 - **Jan 2010 cohort retention, month 1:** 21.47%
 - **Basket rules at 1% support:** 1,066 rules; strongest lift 45.95 (POPPY'S PLAYHOUSE LIVINGROOM → POPPY'S PLAYHOUSE BEDROOM)
 <!-- TIEOUT:END -->

@@ -1,13 +1,13 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.0.0/schema.json",
-  "name": "re_card2",
+  "name": "re_card3",
   "position": {
-    "x": 648,
+    "x": 964,
     "y": 96,
-    "z": 12,
+    "z": 13,
     "width": 300,
     "height": 96,
-    "tabOrder": 12
+    "tabOrder": 13
   },
   "visual": {
     "visualType": "card",
@@ -23,11 +23,11 @@
                       "Entity": "fact_sales"
                     }
                   },
-                  "Property": "Cancellation Rate"
+                  "Property": "Revenue"
                 }
               },
-              "queryRef": "fact_sales.Cancellation Rate",
-              "nativeQueryRef": "Cancellation Rate"
+              "queryRef": "fact_sales.Revenue",
+              "nativeQueryRef": "Revenue"
             }
           ]
         }
@@ -48,7 +48,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Cancellation rate'"
+                  "Value": "'Net revenue'"
                 }
               }
             }

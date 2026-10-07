@@ -17,14 +17,15 @@ def test_filter_frame_is_inclusive_and_filters_country(tiny):
 
 def test_kpis(tiny):
     k = m.kpis(tiny)
-    # product sales lines: 10 + 20 + 20 + 5 + 30 + 40; POST line and the cancellation excluded
-    assert k["revenue"] == 125
+    # gross product sales: 10 + 20 + 20 + 5 + 30 + 40 = 125 (POST line excluded); one 20 cancellation
+    assert k["gross_sales"] == 125
+    assert k["revenue"] == 105  # net: 125 - 20
     assert k["orders"] == 4
     assert k["customers"] == 2  # guest line has no id
-    assert k["aov"] == pytest.approx(31.25)
-    assert k["units"] == 13
+    assert k["aov"] == pytest.approx(26.25)  # 105 / 4
+    assert k["units"] == 12  # 13 sold - 1 cancelled
     assert k["cancelled_value"] == 20
-    assert k["cancel_rate"] == pytest.approx(0.16)
+    assert k["cancel_rate"] == pytest.approx(0.16)  # cancelled / gross sales
 
 
 def test_kpi_deltas():
@@ -43,7 +44,7 @@ def test_previous_period():
 def test_monthly_revenue_flags_partial_months(tiny):
     out = m.monthly_revenue(tiny, date(2010, 1, 1), date(2010, 2, 15)).set_index("month")
     assert out.loc["2010-01-01", "revenue"] == 50
-    assert out.loc["2010-02-01", "revenue"] == 75
+    assert out.loc["2010-02-01", "revenue"] == 55  # 75 sold - 20 cancelled on Feb 16
     assert not out.loc["2010-01-01", "partial"]
     assert out.loc["2010-02-01", "partial"]  # window stops on the 15th
 
@@ -64,15 +65,16 @@ def test_products_and_pareto(tiny):
     assert (row["revenue"], row["units"], row["orders"], row["customers"]) == (35, 7, 3, 2)
 
     p = m.pareto(tiny)
-    assert list(p["cum_revenue_share"].round(2)) == [0.48, 0.76, 1.0]
+    # net revenue 10002: 60 - 20 = 40, 10001: 35, 10003: 30; total 105
+    assert list(p["cum_revenue_share"].round(2)) == [0.38, 0.71, 1.0]
     assert m.pareto_point(p, 0.8) == 1.0
     assert m.pareto_point(p, 0.5) == pytest.approx(2 / 3)
 
 
 def test_country_summary(tiny):
     c = m.country_summary(tiny).set_index("country")
-    assert c.loc["United Kingdom", "revenue"] == 65
-    assert c.loc["United Kingdom", "share"] == pytest.approx(0.52)
+    assert c.loc["United Kingdom", "revenue"] == 45  # 65 - 20 cancelled
+    assert c.loc["United Kingdom", "share"] == pytest.approx(45 / 105)
     assert c.loc["United Kingdom", "iso3"] == "GBR"
     assert c.loc["Germany", "aov"] == 40
 
@@ -92,8 +94,8 @@ def test_segment_lookup_covers_every_score():
 
 def test_rfm(tiny):
     r = m.rfm(tiny, date(2010, 2, 17)).set_index("customer_id")
-    # customer 1: last bought Feb 10 (7 days), 2 orders, 10+20+5+30 = 65
-    assert (r.loc[1, "recency"], r.loc[1, "frequency"], r.loc[1, "monetary"]) == (7, 2, 65)
+    # customer 1: last bought Feb 10 (7 days), 2 orders, 10+20+5+30 = 65 less a 20 cancellation = 45
+    assert (r.loc[1, "recency"], r.loc[1, "frequency"], r.loc[1, "monetary"]) == (7, 2, 45)
     # customer 2: last bought Jan 20 (28 days), 1 order, 20
     assert (r.loc[2, "recency"], r.loc[2, "frequency"], r.loc[2, "monetary"]) == (28, 1, 20)
     # two customers -> rank pct 0.5 / 1.0 -> scores 3 / 5
@@ -101,7 +103,7 @@ def test_rfm(tiny):
     assert (r.loc[2, "r_score"], r.loc[2, "f_score"], r.loc[2, "segment"]) == (3, 3, "Need Attention")
 
     s = m.segment_summary(m.rfm(tiny, date(2010, 2, 17))).set_index("segment")
-    assert s.loc["Champions", "revenue_share"] == pytest.approx(65 / 85)
+    assert s.loc["Champions", "revenue_share"] == pytest.approx(45 / 65)
 
 
 def test_cohorts_use_full_history(tiny):
@@ -112,6 +114,7 @@ def test_cohorts_use_full_history(tiny):
     assert c.loc[(jan, 1), "customers"] == 1
     assert c.loc[(jan, 1), "retention"] == 0.5
     assert c.loc[(jan, 0), "revenue"] == 50
+    assert c.loc[(jan, 1), "revenue"] == 15  # Feb: 5 + 30 sold - 20 cancelled by customer 1
     # Filtering to February must not relabel customer 1 (acquired in January) as a new Feb cohort.
     feb_only = m.filter_frame(tiny, date(2010, 2, 1), date(2010, 2, 28))
     assert m.cohort_table(feb_only, acquired).empty
@@ -167,3 +170,22 @@ def test_largest_cancellations(tiny):
     top = m.largest_cancellations(tiny, n=3)
     assert len(top) == 1  # only one cancelled product line in the fixture
     assert (top.loc[0, "quantity"], top.loc[0, "value"], top.loc[0, "share_of_cancelled"]) == (1, 20, 1.0)
+
+
+def test_order_cancelled_in_full_nets_to_zero():
+    """A bulk order placed and then cancelled must not rank as a top product or a big spender."""
+    df = make_frame([
+        ("2001", "2010-03-01 10:00", "20001", 1000, 2.0, 7, "France"),   # 2,000 ordered ...
+        ("C2002", "2010-03-01 11:00", "20001", -1000, 2.0, 7, "France"),  # ... and cancelled in full
+        ("2003", "2010-03-02 10:00", "20002", 10, 5.0, 8, "France"),      # 50, a real sale
+    ])
+    k = m.kpis(df)
+    assert (k["gross_sales"], k["revenue"], k["units"]) == (2050, 50, 10)
+    top = m.top_products(df, by="revenue", n=2).set_index("stock_code")
+    assert list(top.index) == ["20002", "20001"]
+    assert (top.loc["20001", "revenue"], top.loc["20001", "units"]) == (0, 0)
+    assert list(m.pareto(df)["stock_code"]) == ["20002"]  # nothing earned, so not on the 80/20 curve
+    r = m.rfm(df, date(2010, 3, 3)).set_index("customer_id")
+    assert (r.loc[7, "monetary"], r.loc[8, "monetary"]) == (0, 50)
+    assert m.country_summary(df).set_index("country").loc["France", "revenue"] == 50
+    assert m.product_detail(df, "20001")["monthly"]["revenue"].sum() == 0

@@ -8,10 +8,12 @@ summary = data.compute("product_summary", f)
 if data.empty_state(summary, "product sales"):
     st.stop()
 
-RANKINGS = {"Revenue": ("revenue", ch.money), "Units sold": ("units", ch.number), "Orders": ("orders", ch.number)}
+RANKINGS = {"Net revenue": ("revenue", ch.money), "Units (net)": ("units", ch.number),
+            "Orders": ("orders", ch.number)}
 c1, c2, _ = st.columns([1, 2, 3])
 rank_by = c1.selectbox("Rank by", list(RANKINGS))
 n = c2.slider("How many products", 5, 25, 10)
+st.caption("Revenue and units are net of cancellations, so an order that was cancelled in full counts for nothing.")
 col, fmt = RANKINGS[rank_by]
 
 left, right = st.columns(2, gap="large")
@@ -43,8 +45,8 @@ labels = dict(zip(choices["stock_code"], choices["stock_code"] + " · " + ch.nic
 code = st.selectbox("Product (top 500 by revenue)", list(labels), format_func=labels.get)
 row = summary.set_index("stock_code").loc[code]
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Revenue", ch.money(row["revenue"], 2), border=True)
-m2.metric("Units sold", f"{row['units']:,}", border=True)
+m1.metric("Net revenue", ch.money(row["revenue"], 2), border=True)
+m2.metric("Units (net)", f"{row['units']:,}", border=True)
 m3.metric("Orders", f"{row['orders']:,}", border=True)
 m4.metric("Revenue rank", f"#{summary.index[summary['stock_code'] == code][0] + 1:,}", border=True)
 

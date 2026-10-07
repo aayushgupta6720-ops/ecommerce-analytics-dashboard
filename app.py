@@ -60,7 +60,7 @@ with st.sidebar:
     st.caption(
         "Data: [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii) "
         "(Chen, 2012, CC BY 4.0). A UK online gift retailer, 1M invoice lines, Dec 2009 – Dec 2011. "
-        "Revenue is gross product sales in GBP."
+        "Revenue is product sales net of cancellations, in GBP."
     )
 
 page.run()

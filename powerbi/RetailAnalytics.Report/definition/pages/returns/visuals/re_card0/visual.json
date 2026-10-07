@@ -5,7 +5,7 @@
     "x": 16,
     "y": 96,
     "z": 10,
-    "width": 405,
+    "width": 300,
     "height": 96,
     "tabOrder": 10
   },
@@ -23,11 +23,11 @@
                       "Entity": "fact_sales"
                     }
                   },
-                  "Property": "Cancelled Value"
+                  "Property": "Gross Sales"
                 }
               },
-              "queryRef": "fact_sales.Cancelled Value",
-              "nativeQueryRef": "Cancelled Value"
+              "queryRef": "fact_sales.Gross Sales",
+              "nativeQueryRef": "Gross Sales"
             }
           ]
         }
@@ -48,7 +48,7 @@
             "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Cancelled value'"
+                  "Value": "'Gross sales'"
                 }
               }
             }

@@ -207,7 +207,7 @@ def _cards(prefix: str, measures: list[tuple[str, str]], y: int = 96) -> list[di
 def pages() -> list[tuple[str, str, list[dict]]]:
     return [
         ("overview", "Overview", _slicers("ov") + _cards("ov", [
-            ("Revenue", "Revenue"), ("Orders", "Orders"), ("Customers", "Customers"),
+            ("Revenue", "Net revenue"), ("Orders", "Orders"), ("Customers", "Customers"),
             ("Avg Order Value", "Avg order value"), ("Cancellation Rate", "Cancel rate")]) + [
             visual("ov_trend", "lineChart", 16, 208, 780, 250, 20,
                    {"Category": [proj(D, "month_start")], "Y": [proj(F, "Revenue", True)]}, "Monthly revenue"),
@@ -268,8 +268,8 @@ def pages() -> list[tuple[str, str, list[dict]]]:
                    "Association rules (sorted by lift)", sort=(B, "lift", False, "Descending")),
         ]),
         ("returns", "Returns & cancellations", _slicers("re") + _cards("re", [
-            ("Cancelled Value", "Cancelled value"), ("Cancellation Rate", "Cancellation rate"),
-            ("Net Revenue", "Revenue after cancellations")]) + [
+            ("Gross Sales", "Gross sales"), ("Cancelled Value", "Cancelled value"),
+            ("Cancellation Rate", "Cancellation rate"), ("Revenue", "Net revenue")]) + [
             visual("re_trend", "lineChart", 16, 208, 620, 496, 20,
                    {"Category": [proj(D, "month_start")], "Y": [proj(F, "Cancellation Rate", True)]},
                    "Cancellation rate by month"),

@@ -113,7 +113,7 @@ set it in the **Properties** pane:
 
 | Format | Measures |
 |---|---|
-| **Currency £, 0 decimals** | Revenue, Revenue PY, Cancelled Value, Net Revenue, Segment Revenue |
+| **Currency £, 0 decimals** | Revenue, Gross Sales, Revenue PY, Cancelled Value, Segment Revenue |
 | **Currency £, 2 decimals** | Avg Order Value |
 | **Whole number, thousands separator** | Orders, Customers, Units, Units Cancelled, Segment Customers |
 | **Percentage, 1 decimal** | Country Revenue Share, Revenue YoY %, Pareto Cumulative %, Cancellation Rate, Segment Customer Share, Segment Revenue Share, Retention % |
@@ -151,7 +151,8 @@ This gives the report the same colours as the Streamlit app.
 Each visual below is written as **visual type**: field wells. Fields are *table[column]*; measures are in **bold**.
 
 ### Overview
-- **Card** ×5, one each for **Revenue**, **Orders**, **Customers**, **Avg Order Value** and **Cancellation Rate**.
+- **Card** ×5, one each for **Revenue** (net of cancellations), **Orders**, **Customers**, **Avg Order Value** and
+  **Cancellation Rate**.
   The newer card visual can hold all five in one visual.
 - **Line chart**, titled "Monthly revenue".
   - X-axis: `dim_date[month_start]`. Y-axis: **Revenue**.
@@ -204,7 +205,7 @@ Each visual below is written as **visual type**: field wells. Fields are *table[
   sorted by `lift` descending.
 
 ### Returns & cancellations
-- **Card** ×3 for **Cancelled Value**, **Cancellation Rate** and **Net Revenue**.
+- **Card** ×4 for **Gross Sales**, **Cancelled Value**, **Cancellation Rate** and **Revenue** (net).
 - **Line chart**: X-axis `dim_date[month_start]`, Y-axis **Cancellation Rate**.
 - **Clustered column chart**: X-axis `dim_date[month_start]`, Y-axis **Cancelled Value**.
   Keep this separate from the line chart; don't combine them with a second axis.
@@ -220,20 +221,22 @@ Each visual below is written as **visual type**: field wells. Fields are *table[
 
 ## 11. Check the numbers
 
-With the slicers set as described, the cards should show exactly:
+With the slicers set as described, the cards should show exactly these values. They're computed by the
+Streamlit app's own code and refreshed on every export. **Revenue** is net of cancellations.
 
+<!-- TIEOUT:START -->
 | Slice | Revenue | Orders | Customers | Avg Order Value | Cancellation Rate |
 |---|---:|---:|---:|---:|---:|
-| All data | £19,642,692.15 | 39,516 | 5,852 | £497.08 | 3.65% |
-| Calendar 2011 | £9,471,248.64 | 18,223 | 4,214 | £519.74 | 4.84% |
-| France, all dates | £311,090.29 | 598 | 93 | £520.22 | 5.68% |
-| Germany, Q1 2011 | £36,984.58 | 81 | 41 | £456.60 | 3.40% |
+| All data | £18,926,266.18 | 39,516 | 5,852 | £478.95 | 3.65% |
+| Calendar 2011 | £9,012,895.34 | 18,223 | 4,214 | £494.59 | 4.84% |
+| France, all dates | £293,431.20 | 598 | 93 | £490.69 | 5.68% |
+| Germany, Q1 2011 | £35,726.69 | 81 | 41 | £441.07 | 3.40% |
 
-Other reference values:
-- Top product: Regency Cakestand 3 Tier, £330,590.32
-- Champions segment: 826 customers
-- Jan 2010 cohort, month 1: 21.47%
-- Strongest basket rule: Poppy's Playhouse Livingroom → Bedroom, lift 45.95
+- **Top product by revenue:** REGENCY CAKESTAND 3 TIER (22423), £314,045.02
+- **Champions:** 826 customers, 52.27% of segmented revenue
+- **Jan 2010 cohort retention, month 1:** 21.47%
+- **Basket rules at 1% support:** 1,066 rules; strongest lift 45.95 (POPPY'S PLAYHOUSE LIVINGROOM → POPPY'S PLAYHOUSE BEDROOM)
+<!-- TIEOUT:END -->
 
 ## 12. Save and show it off
 

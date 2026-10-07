@@ -176,14 +176,16 @@ RELATIONSHIPS = [
 SALE = "fact_sales[is_cancellation] = FALSE()"
 CANCEL = "fact_sales[is_cancellation] = TRUE()"
 MEASURES = [
-    Measure("Revenue", "fact_sales", f"CALCULATE(SUM(fact_sales[revenue]), {SALE})", GBP, "Sales",
-            "Gross product sales in GBP (cancellations excluded)."),
+    Measure("Revenue", "fact_sales", "SUM(fact_sales[revenue])", GBP, "Sales",
+            "Net revenue in GBP: product sales minus cancelled product lines (cancellations are negative)."),
+    Measure("Gross Sales", "fact_sales", f"CALCULATE(SUM(fact_sales[revenue]), {SALE})", GBP, "Sales",
+            "Product sales before cancellations."),
     Measure("Orders", "fact_sales", f"CALCULATE(DISTINCTCOUNT(fact_sales[invoice]), {SALE})", INT, "Sales",
             "Distinct sales invoices."),
     Measure("Customers", "fact_sales", f"CALCULATE(DISTINCTCOUNTNOBLANK(fact_sales[customer_id]), {SALE})", INT,
             "Sales", "Distinct identified customers; guest lines have no customer ID."),
     Measure("Avg Order Value", "fact_sales", "DIVIDE([Revenue], [Orders])", GBP2, "Sales", "Revenue / Orders."),
-    Measure("Units", "fact_sales", f"CALCULATE(SUM(fact_sales[quantity]), {SALE})", INT, "Sales", "Units sold."),
+    Measure("Units", "fact_sales", "SUM(fact_sales[quantity])", INT, "Sales", "Units sold minus units cancelled."),
     Measure("Country Revenue Share", "fact_sales",
             "DIVIDE([Revenue], CALCULATE([Revenue], ALLSELECTED(dim_country[country])))", PCT, "Sales",
             "Share of the selected countries' revenue."),
@@ -200,10 +202,8 @@ MEASURES = [
             "Cumulative share of revenue from products earning at least as much as this one (80/20 curve)."),
     Measure("Cancelled Value", "fact_sales", f"CALCULATE(-SUM(fact_sales[revenue]), {CANCEL})", GBP, "Returns",
             "Value of cancelled product lines, as a positive number."),
-    Measure("Cancellation Rate", "fact_sales", "DIVIDE([Cancelled Value], [Revenue])", PCT, "Returns",
-            "Cancelled value / gross product sales."),
-    Measure("Net Revenue", "fact_sales", "[Revenue] - [Cancelled Value]", GBP, "Returns",
-            "Gross product sales minus cancellations."),
+    Measure("Cancellation Rate", "fact_sales", "DIVIDE([Cancelled Value], [Gross Sales])", PCT, "Returns",
+            "Cancelled value / gross sales."),
     Measure("Units Cancelled", "fact_sales", f"CALCULATE(-SUM(fact_sales[quantity]), {CANCEL})", INT, "Returns",
             "Units on cancelled lines, as a positive number."),
     Measure("Segment Customers", "dim_customer", "COUNTROWS(FILTER(dim_customer, NOT ISBLANK(dim_customer[segment])))",
@@ -450,12 +450,12 @@ def tieout(df: pd.DataFrame) -> str:
 
 
 def refresh_guide(block: str) -> None:
-    guide = PBI / "BUILD_GUIDE.md"
-    text = guide.read_text()
-    new = re.sub(r"(<!-- TIEOUT:START -->\n).*?(\n<!-- TIEOUT:END -->)", lambda m: m.group(1) + block + m.group(2),
-                 text, flags=re.S)
-    guide.write_text(new)
-    print("  BUILD_GUIDE.md tie-out refreshed" if new != text else "  BUILD_GUIDE.md tie-out unchanged")
+    for guide in (PBI / "BUILD_GUIDE.md", PBI / "DESKTOP_GUIDE.md"):
+        text = guide.read_text()
+        new = re.sub(r"(<!-- TIEOUT:START -->\n).*?(\n<!-- TIEOUT:END -->)",
+                     lambda m: m.group(1) + block + m.group(2), text, flags=re.S)
+        guide.write_text(new)
+        print(f"  {guide.name} tie-out {'refreshed' if new != text else 'unchanged'}")
 
 
 def main() -> None:

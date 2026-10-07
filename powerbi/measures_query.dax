@@ -3,6 +3,8 @@
 // "Update model with changes" to add all measures to the model in one go.
 DEFINE
     MEASURE fact_sales[Revenue] =
+        SUM(fact_sales[revenue])
+    MEASURE fact_sales[Gross Sales] =
         CALCULATE(SUM(fact_sales[revenue]), fact_sales[is_cancellation] = FALSE())
     MEASURE fact_sales[Orders] =
         CALCULATE(DISTINCTCOUNT(fact_sales[invoice]), fact_sales[is_cancellation] = FALSE())
@@ -11,7 +13,7 @@ DEFINE
     MEASURE fact_sales[Avg Order Value] =
         DIVIDE([Revenue], [Orders])
     MEASURE fact_sales[Units] =
-        CALCULATE(SUM(fact_sales[quantity]), fact_sales[is_cancellation] = FALSE())
+        SUM(fact_sales[quantity])
     MEASURE fact_sales[Country Revenue Share] =
         DIVIDE([Revenue], CALCULATE([Revenue], ALLSELECTED(dim_country[country])))
     MEASURE fact_sales[Revenue PY] =
@@ -27,9 +29,7 @@ DEFINE
     MEASURE fact_sales[Cancelled Value] =
         CALCULATE(-SUM(fact_sales[revenue]), fact_sales[is_cancellation] = TRUE())
     MEASURE fact_sales[Cancellation Rate] =
-        DIVIDE([Cancelled Value], [Revenue])
-    MEASURE fact_sales[Net Revenue] =
-        [Revenue] - [Cancelled Value]
+        DIVIDE([Cancelled Value], [Gross Sales])
     MEASURE fact_sales[Units Cancelled] =
         CALCULATE(-SUM(fact_sales[quantity]), fact_sales[is_cancellation] = TRUE())
     MEASURE dim_customer[Segment Customers] =

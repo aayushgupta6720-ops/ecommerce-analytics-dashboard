@@ -3,8 +3,12 @@
 // then paste one block at a time (name = expression). Set the format shown in the comment.
 
 // ===== Sales =====
-// Gross product sales in GBP (cancellations excluded).  |  home table: fact_sales  |  format: £#,0
+// Net revenue in GBP: product sales minus cancelled product lines (cancellations are negative).  |  home table: fact_sales  |  format: £#,0
 Revenue =
+    SUM(fact_sales[revenue])
+
+// Product sales before cancellations.  |  home table: fact_sales  |  format: £#,0
+Gross Sales =
     CALCULATE(SUM(fact_sales[revenue]), fact_sales[is_cancellation] = FALSE())
 
 // Distinct sales invoices.  |  home table: fact_sales  |  format: #,0
@@ -19,9 +23,9 @@ Customers =
 Avg Order Value =
     DIVIDE([Revenue], [Orders])
 
-// Units sold.  |  home table: fact_sales  |  format: #,0
+// Units sold minus units cancelled.  |  home table: fact_sales  |  format: #,0
 Units =
-    CALCULATE(SUM(fact_sales[quantity]), fact_sales[is_cancellation] = FALSE())
+    SUM(fact_sales[quantity])
 
 // Share of the selected countries' revenue.  |  home table: fact_sales  |  format: 0.0%
 Country Revenue Share =
@@ -50,13 +54,9 @@ Pareto Cumulative % =
 Cancelled Value =
     CALCULATE(-SUM(fact_sales[revenue]), fact_sales[is_cancellation] = TRUE())
 
-// Cancelled value / gross product sales.  |  home table: fact_sales  |  format: 0.0%
+// Cancelled value / gross sales.  |  home table: fact_sales  |  format: 0.0%
 Cancellation Rate =
-    DIVIDE([Cancelled Value], [Revenue])
-
-// Gross product sales minus cancellations.  |  home table: fact_sales  |  format: £#,0
-Net Revenue =
-    [Revenue] - [Cancelled Value]
+    DIVIDE([Cancelled Value], [Gross Sales])
 
 // Units on cancelled lines, as a positive number.  |  home table: fact_sales  |  format: #,0
 Units Cancelled =

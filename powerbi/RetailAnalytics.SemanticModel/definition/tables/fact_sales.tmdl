@@ -2,11 +2,17 @@
 table fact_sales
 	lineageTag: 6530ed54-a9cb-550c-8381-a5f60718d19e
 
-	/// Gross product sales in GBP (cancellations excluded).
-	measure Revenue = CALCULATE(SUM(fact_sales[revenue]), fact_sales[is_cancellation] = FALSE())
+	/// Net revenue in GBP: product sales minus cancelled product lines (cancellations are negative).
+	measure Revenue = SUM(fact_sales[revenue])
 		formatString: \£#,0
 		displayFolder: Sales
 		lineageTag: 203b4d21-75a0-5bfc-b31b-52382af005e0
+
+	/// Product sales before cancellations.
+	measure 'Gross Sales' = CALCULATE(SUM(fact_sales[revenue]), fact_sales[is_cancellation] = FALSE())
+		formatString: \£#,0
+		displayFolder: Sales
+		lineageTag: bc847c23-82eb-5e0a-9379-3eed19447413
 
 	/// Distinct sales invoices.
 	measure Orders = CALCULATE(DISTINCTCOUNT(fact_sales[invoice]), fact_sales[is_cancellation] = FALSE())
@@ -26,8 +32,8 @@ table fact_sales
 		displayFolder: Sales
 		lineageTag: 9e5aa255-1536-5be3-a3cf-2037207c0052
 
-	/// Units sold.
-	measure Units = CALCULATE(SUM(fact_sales[quantity]), fact_sales[is_cancellation] = FALSE())
+	/// Units sold minus units cancelled.
+	measure Units = SUM(fact_sales[quantity])
 		formatString: #,0
 		displayFolder: Sales
 		lineageTag: 5037f53d-1a78-5948-bddb-6b0e60970a74
@@ -68,17 +74,11 @@ table fact_sales
 		displayFolder: Returns
 		lineageTag: 1491a416-d918-5a90-8533-6acd55a32db6
 
-	/// Cancelled value / gross product sales.
-	measure 'Cancellation Rate' = DIVIDE([Cancelled Value], [Revenue])
+	/// Cancelled value / gross sales.
+	measure 'Cancellation Rate' = DIVIDE([Cancelled Value], [Gross Sales])
 		formatString: 0.0%
 		displayFolder: Returns
 		lineageTag: 662328de-c740-50db-9133-c3bcf28c5265
-
-	/// Gross product sales minus cancellations.
-	measure 'Net Revenue' = [Revenue] - [Cancelled Value]
-		formatString: \£#,0
-		displayFolder: Returns
-		lineageTag: 72afd41b-3f8d-54cc-92dc-d5a737b2f485
 
 	/// Units on cancelled lines, as a positive number.
 	measure 'Units Cancelled' = CALCULATE(-SUM(fact_sales[quantity]), fact_sales[is_cancellation] = TRUE())
