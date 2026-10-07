@@ -147,29 +147,30 @@ with clv_tab:
               f"{v['return_auc_model'] - v['return_auc_baseline']:+.3f} vs baseline", border=True)
     k3.metric("Revenue ranking (Spearman)", f"{rv['spearman_model']:.3f}",
               f"{rv['spearman_model'] - rv['spearman_baseline']:+.3f} vs last year's spend", border=True)
-    k4.metric("Total purchases", f"{pu['predicted_total']:,.0f} predicted", f"{pu['actual_total']:,} actual",
-              delta_color="off", border=True)
+    k4.metric("Purchases predicted", f"{pu['predicted_total']:,.0f}", f"{pu['actual_total']:,} actual",
+              delta_color="off", delta_arrow="off", border=True)
 
-    left, right = st.columns([3, 2], gap="large")
-    with left:
+    dec_col, help_col = st.columns([3, 2], gap="large")
+    with dec_col:
         dec = pd.DataFrame(v["deciles"])
         ch.show(ch.grouped_columns(dec["decile"].astype(str),
                                    {"Predicted": dec["predicted_revenue"], "Actual": dec["actual_revenue"]},
                                    title="Average holdout revenue per customer, by predicted-value decile",
                                    yprefix="£", xtitle="predicted value decile (10 = highest)"))
-    with right:
+    with help_col:
         sh, lo = v["short_history"], v["long_history"]
         comparison = pd.DataFrame({
-            "Customers": [f"Under 26 weeks of history ({sh['customers']:,})", f"26+ weeks ({lo['customers']:,})"],
-            "Purchase error: model": [sh["mae_model"], lo["mae_model"]],
-            "Purchase error: baseline": [sh["mae_baseline"], lo["mae_baseline"]],
-            "Revenue ranking: model": [sh["spearman_model"], lo["spearman_model"]],
-            "Revenue ranking: baseline": [sh["spearman_baseline"], lo["spearman_baseline"]],
+            "History": [f"Under 26 weeks ({sh['customers']:,})", f"26+ weeks ({lo['customers']:,})"],
+            "Error: model": [sh["mae_model"], lo["mae_model"]],
+            "Error: baseline": [sh["mae_baseline"], lo["mae_baseline"]],
         })
-        st.markdown("**Where the model helps**")
+        st.markdown("**Where the model helps: purchase error per customer**")
         st.dataframe(comparison, hide_index=True, width="stretch",
                      column_config={c: st.column_config.NumberColumn(c, format="%.2f")
                                     for c in comparison.columns[1:]})
+        st.caption(f"Revenue ranking (Spearman), model vs last year's spend: {sh['spearman_model']:.2f} vs "
+                   f"{sh['spearman_baseline']:.2f} for newer customers, {lo['spearman_model']:.2f} vs "
+                   f"{lo['spearman_baseline']:.2f} for established ones.")
         st.caption(
             "For new customers, extrapolating a few weeks of buying is unreliable; the model's shrinkage towards the "
             "population pattern cuts that error a lot. For established customers, last year is already a good guide."

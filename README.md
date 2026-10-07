@@ -109,6 +109,8 @@ reads, and CI checks those results are reproducible.
 | **Churn** (no purchase in the next 90 days), logistic regression | AUC **0.759**; 77% of the riskiest 20% churned (base rate 49%) | "Longest since last order": AUC 0.707 |
 | **Customer lifetime value**, BG/NBD + Gamma-Gamma | Purchase error 2.36 per customer; revenue ranking (Spearman) 0.588 | Calibration-year rate 2.63; last year's spend 0.618 |
 
+![Predictions page: 12-month-ahead forecast vs actual](docs/screenshots/predictions-forecast.png)
+
 What the evaluation showed, and the page says plainly:
 - **Seasonality dominates.** With one earlier year to learn from, "same month last year" is the honest benchmark.
 - **Churn rates swing with the season.** About 42% of customers lapse in the 90 days after a September cutoff,
@@ -128,6 +130,8 @@ KPIs, monthly revenue, product summary, RFM scoring (including rank-based quinti
 [`tests/test_sql.py`](tests/test_sql.py) checks that every query returns exactly what the pandas version returns,
 row by row, across six filter combinations, one of which is empty. The SQL page shows each query and runs it live
 for the current filters.
+
+![SQL page: the RFM query and its live result](docs/screenshots/sql-queries.png)
 
 ## Project layout
 
@@ -171,11 +175,14 @@ point. The data files aren't committed because they're large; the export regener
 - **Start**: `streamlit run app.py` on `$PORT`, with health check `/_stcore/health`.
 
 Memory was profiled for Render's 512 MB instance:
-- The app peaks at about 310 MB on macOS after visiting every page in both themes (it started at 540 MB),
-  and at about 370 MB on the live Render instance.
-- Most of the saving came from calculations copying only the columns they need, integer-code basket
-  counting, numpy bincounts for the landing-page metrics, and the memory-mapped Arrow load.
-- `MALLOC_ARENA_MAX=2` stops glibc from growing a memory arena per session thread.
+- On the live instance the app idles at about 100 MB and peaked at about 440 MB while every page was visited in
+  both themes, starting from a cold SQL page, with every Predictions tab and SQL query opened. That's about 70 MB
+  of headroom. Render samples memory every 30 seconds, so brief spikes can go slightly higher.
+- The savings come from calculations working on integer category codes with numpy instead of copying 1M-row
+  columns, the memory-mapped Arrow load, DuckDB capped at 64 MB with a streaming (`NOT MATERIALIZED`) filter, and
+  handing freed memory back to the OS after every uncached calculation.
+- `MALLOC_ARENA_MAX=2` stops glibc from growing a memory arena per session thread, and `MALLOC_MMAP_THRESHOLD_`
+  makes large temporary arrays go straight back to the OS when they're freed.
 
 ## Tests and CI
 
