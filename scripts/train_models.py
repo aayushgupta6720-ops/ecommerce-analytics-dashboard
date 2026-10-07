@@ -133,7 +133,18 @@ def churn(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
                                  for c in SEASONAL_CUTOFFS},
         "calibration": calib.to_dict("list"),
     }
-    return test[["customer_id", *models.CHURN_FEATURES, "churn_probability", "churned"]], metrics
+    metrics["scaler"] = {"means": list(map(float, model.means)), "stds": list(map(float, model.stds))}
+    # Score every customer active in the last year as of the end of the data: who to look after now. The
+    # outcome is unknown (it's in the future), and the probabilities belong to the September training
+    # season, so the Insights page uses the rank (risk percentile), not the probability.
+    now = df["invoice_date"].max().normalize() + pd.Timedelta(days=1)
+    current = models.churn_dataset(df, now, CHURN_HORIZON).drop(columns="churned")
+    current["churn_probability"] = model.predict_proba(current[models.CHURN_FEATURES])
+    current["risk_percentile"] = current["churn_probability"].rank(pct=True)
+    metrics["current_cutoff"] = str(now.date())
+    metrics["current_customers"] = int(len(current))
+    return (test[["customer_id", *models.CHURN_FEATURES, "churn_probability", "churned"]],
+            current[["customer_id", *models.CHURN_FEATURES, "churn_probability", "risk_percentile"]]), metrics
 
 
 def forecast(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -151,11 +162,11 @@ def forecast(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 def run() -> tuple[dict, dict[str, pd.DataFrame]]:
     df = pd.read_parquet(ROOT / "data" / "processed" / "transactions.parquet")
     clv_table, clv_metrics = clv(df)
-    churn_table, churn_metrics = churn(df)
+    (churn_table, current_table), churn_metrics = churn(df)
     fc_table, fc_metrics = forecast(df)
     metrics = {"calibration_end": str(CAL_END.date()), "holdout_end": str(HOLDOUT_END.date()),
                "clv": clv_metrics, "churn": churn_metrics, "forecast": fc_metrics}
-    return metrics, {"clv": clv_table, "churn": churn_table, "forecast": fc_table}
+    return metrics, {"clv": clv_table, "churn": churn_table, "churn_current": current_table, "forecast": fc_table}
 
 
 def _close(a, b, path="") -> list[str]:

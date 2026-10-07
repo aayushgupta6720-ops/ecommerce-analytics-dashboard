@@ -13,7 +13,7 @@ which sleeps after 15 minutes idle, so the first visit can take about a minute t
 
 ## What's in it
 
-Nine pages. The seven analysis pages respond to the sidebar filters (period, countries, *Exclude United Kingdom*); the SQL page runs its queries with those filters too.
+Ten pages. The seven analysis pages respond to the sidebar filters (period, countries, *Exclude United Kingdom*), and the SQL page runs its queries with them too. Insights and Predictions use the full two years.
 
 | Page | What it answers |
 |---|---|
@@ -24,6 +24,7 @@ Nine pages. The seven analysis pages respond to the sidebar filters (period, cou
 | **Cohort retention** | Monthly acquisition cohorts × months since first order: retention %, active customers or revenue. |
 | **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. |
 | **Returns & cancellations** | Cancellation rate over time, largest single cancellations, most-cancelled products, and cancellations by country and by customer. |
+| **Insights & actions** | Five prioritised recommendations, each with evidence, an action, value at stake under adjustable assumptions, and a KPI; downloadable win-back and watch lists. |
 | **Predictions** | Revenue forecast, churn risk and customer lifetime value, each trained on 2010 and scored on the following year against a baseline. |
 | **SQL queries** | The core metrics (KPIs, monthly revenue, products, RFM, cohorts) as SQL, run live by DuckDB on the Parquet file. |
 
@@ -96,6 +97,23 @@ code, unit-tested on hand-computed fixtures.
   matrix that apriori libraries build.
 - The **last month is partial** (the data ends on 9 Dec 2011). Trend charts mark it with a hollow point.
 
+## Insights & actions
+
+The page turns the analysis into five recommendations. Values are sized with assumptions you can change on the
+page, using the defaults shown below. They're sized opportunities, not forecasts.
+
+| # | Recommendation | Evidence | Value at stake (default assumption) |
+|---|---|---|---|
+| 1 | Keep Champions buying (VIP tier, monthly watch list from the churn model) | 14% of customers bring in 52% of revenue (£4.5M in the last year); none currently in the riskiest 20% | £225K a year protected if a VIP tier keeps 5% of their revenue |
+| 2 | Win back lapsed high-value customers, with a hold-out group | 831 At Risk / Can't Lose customers spent £1.18M in their last active year | £118K a year at a 10% win-back rate |
+| 3 | Plan stock and staff for September–November | 36–38% of annual revenue in both years; November about 1.8× an average month | £70K a season if 2% of peak demand is lost today |
+| 4 | Turn guest checkouts into accounts | 13% of gross sales (£1.3M a year) come from orders that can't be contacted | £382K a year made reachable at 30% conversion |
+| 5 | Confirm bulk orders before picking | 40 cancelled lines of 1,000+ units are 40% of cancelled value; about 13 large lines a month to check | £14K a year of handling at 10% of goods value |
+
+It also shows what was **considered and not prioritised**. "Complete the set" prompts for the strongest product
+pairs would be worth at most about £22K, even if every order missing a partner item had added it. The page
+shows that too, because knowing what not to do matters as much.
+
 ## Predictions
 
 Each model is trained on data up to 9 Dec 2010 and scored on the following 365 days, which it never saw,
@@ -143,6 +161,7 @@ retail/data.py         Streamlit caching layer: one shared DataFrame, aggregates
 retail/charts.py       Plotly builders sharing one palette in light and dark themes
 retail/countries.py    country names -> ISO-3 codes and regions
 retail/models.py       BG/NBD, Gamma-Gamma, logistic regression, forecast baselines, evaluation helpers
+retail/insights.py     the evidence behind each recommendation on the Insights page
 retail/sql.py          runs sql/*.sql with DuckDB on the Parquet file
 sql/                   the metrics as SQL (KPIs, monthly revenue, products, RFM, cohorts)
 scripts/               dataset build, model training, Power BI export, PBIP generator + validator
@@ -205,6 +224,8 @@ The tests cover:
 - **App:** every page rendered with default filters, a narrow filter (Portugal, one quarter) and an empty
   one (Iceland on a Saturday).
 - **SQL:** each query equals its pandas counterpart, row by row, across six filter combinations.
+- **Insights:** hand-checked frames for the win-back and Champions lists, peak share, bulk cancellations,
+  guests and bundle opportunities.
 - **Models:** parameter recovery on simulated customers for BG/NBD and Gamma-Gamma, coefficient recovery for
   the logistic regression, AUC against a brute-force count, and hand-checked dataset builders.
 - **Power BI export:** foreign-key integrity, column order vs the model, totals equal to the app's KPIs,

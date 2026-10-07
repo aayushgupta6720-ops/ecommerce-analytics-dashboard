@@ -116,6 +116,33 @@ def model_table(name: str) -> pd.DataFrame:
     return pd.read_parquet(MODELS_DIR / f"{name}.parquet")
 
 
+@st.cache_data(show_spinner="Working out the recommendations…")
+def insights_bundle() -> dict:
+    """Everything the Insights page needs, computed once on the full dataset."""
+    from retail import insights
+    df = load_data()
+    snapshot = bounds()[1] + timedelta(days=1)
+    current = model_table("churn_current")
+    out = {
+        "snapshot": snapshot,
+        "years": insights.data_years(df),
+        "winback": insights.winback(df, snapshot),
+        "champions": insights.champions(df, snapshot, current),
+        "champion_share": insights.segment_share(df, snapshot, "Champions"),
+        "peak": insights.peak_season(df),
+        "guests": insights.guests(df),
+        "bundles": insights.bundle_opportunities(df),
+    }
+    _release_freed_memory()
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def bulk_cancellations(threshold: int) -> dict:
+    from retail import insights
+    return insights.bulk_cancellations(load_data(), threshold)
+
+
 @st.cache_resource(show_spinner=False)
 def duck():
     """One DuckDB connection per process; each query uses its own cursor (safe across session threads)."""

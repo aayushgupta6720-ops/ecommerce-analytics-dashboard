@@ -10,7 +10,8 @@ from retail.data import Filters
 
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
 PAGES = ["views/overview.py", "views/products.py", "views/geography.py", "views/customers.py",
-         "views/cohorts.py", "views/basket.py", "views/returns.py", "views/predictions.py", "views/sql.py"]
+         "views/cohorts.py", "views/basket.py", "views/returns.py", "views/predictions.py", "views/sql.py",
+         "views/insights.py"]
 
 
 def run_page(page: str, filters: Filters | None = None) -> AppTest:
