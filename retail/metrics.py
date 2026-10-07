@@ -102,6 +102,46 @@ def _codes(col: pd.Series) -> np.ndarray:
     return col.cat.codes.to_numpy() if isinstance(col.dtype, pd.CategoricalDtype) else pd.factorize(col)[0]
 
 
+def _codes_labels(col: pd.Series) -> tuple[np.ndarray, np.ndarray]:
+    if isinstance(col.dtype, pd.CategoricalDtype):
+        return col.cat.codes.to_numpy(), col.cat.categories.to_numpy()
+    codes, labels = pd.factorize(col)
+    return codes, np.asarray(labels)
+
+
+def _distinct_count(group: np.ndarray, value: np.ndarray, n: int) -> np.ndarray:
+    """Number of distinct non-negative `value`s per `group` code (0..n-1), without a pandas groupby."""
+    keep = value >= 0
+    group, value = group[keep].astype(np.int64), value[keep].astype(np.int64)
+    if not len(value):
+        return np.zeros(n, dtype=np.int64)
+    width = int(value.max()) + 1
+    return np.bincount(np.unique(group * width + value) // width, minlength=n)
+
+
+def _by_code(df: pd.DataFrame, column: str) -> dict[str, np.ndarray]:
+    """Net revenue, net units, orders and customers per category of `column`, via bincounts on codes.
+
+    Far lighter than a groupby on a 1M-row frame (which copies several columns); these feed the
+    Overview, Products and Geography pages on a 512MB instance.
+    """
+    product = df["is_product"].to_numpy()
+    sale = product & ~df["is_cancellation"].to_numpy()
+    codes, labels = _codes_labels(df[column])
+    n = len(labels)
+    sale_codes = codes[sale]
+    return {
+        "labels": labels,
+        "codes": codes,
+        "revenue": np.bincount(codes[product], weights=df["revenue"].to_numpy()[product], minlength=n),
+        "units": np.bincount(codes[product], weights=df["quantity"].to_numpy()[product], minlength=n),
+        "sale_lines": np.bincount(sale_codes, minlength=n),
+        "orders": _distinct_count(sale_codes, _codes(df["invoice"])[sale], n),
+        "customers": _distinct_count(sale_codes, df["customer_id"].to_numpy(dtype="int64", na_value=-1)[sale], n),
+        "product": product,
+    }
+
+
 def kpi_deltas(current: dict[str, float], previous: dict[str, float] | None) -> dict[str, float | None]:
     """Relative change per KPI; the cancellation rate is compared in percentage points."""
     out: dict[str, float | None] = {}
@@ -170,16 +210,26 @@ def weekday_hour(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------- products
 
 def product_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """Per product: net revenue and units (cancellations subtracted), orders and customers from sales."""
-    p = product_rows(df, ["stock_code", "description", "revenue", "quantity"])
-    money = p.groupby("stock_code", observed=True).agg(
-        description=("description", "first"), revenue=("revenue", "sum"), units=("quantity", "sum"))
-    s = sales_rows(df, ["stock_code", "invoice", "customer_id"])
-    counts = s.groupby("stock_code", observed=True).agg(
-        orders=("invoice", "nunique"), customers=("customer_id", "nunique"))
-    out = money.join(counts, how="inner").reset_index()  # products with at least one sale in the slice
-    out["stock_code"] = out["stock_code"].astype(str)
-    out["description"] = out["description"].astype(str)
+    """Per product: net revenue and units (cancellations subtracted), orders and customers from sales.
+    Only products with at least one sale in the slice are listed."""
+    agg = _by_code(df, "stock_code")
+    # Description of each product's first line (descriptions are canonical per stock code after the ETL).
+    first_line = np.full(len(agg["labels"]), -1)
+    prod_idx = np.flatnonzero(agg["product"])
+    uniq, first = np.unique(agg["codes"][prod_idx], return_index=True)
+    first_line[uniq] = prod_idx[first]
+    keep = agg["sale_lines"] > 0
+    # Look descriptions up by category code: Series.to_numpy() would build 1M Python strings.
+    desc_codes, desc_labels = _codes_labels(df["description"])
+    desc = desc_labels[desc_codes[first_line[keep]]]
+    out = pd.DataFrame({
+        "stock_code": agg["labels"][keep].astype(str),
+        "description": desc.astype(str),
+        "revenue": agg["revenue"][keep],
+        "units": agg["units"][keep].round().astype(np.int64),
+        "orders": agg["orders"][keep],
+        "customers": agg["customers"][keep],
+    })
     return out.sort_values("revenue", ascending=False, ignore_index=True)
 
 
@@ -231,14 +281,10 @@ def product_detail(df: pd.DataFrame, stock_code: str) -> dict[str, pd.DataFrame]
 # ---------------------------------------------------------------- geography
 
 def country_summary(df: pd.DataFrame) -> pd.DataFrame:
-    net = product_rows(df, ["country", "revenue"]).groupby("country", observed=True)["revenue"].sum()
-    s = sales_rows(df, ["country", "invoice", "customer_id"])
-    out = (
-        s.groupby("country", observed=True)
-        .agg(orders=("invoice", "nunique"), customers=("customer_id", "nunique"))
-        .reset_index()
-    )
-    out["revenue"] = out["country"].map(net).astype(float)
+    agg = _by_code(df, "country")
+    keep = agg["sale_lines"] > 0
+    out = pd.DataFrame({"country": agg["labels"][keep], "orders": agg["orders"][keep],
+                        "customers": agg["customers"][keep], "revenue": agg["revenue"][keep]})
     out["country"] = out["country"].astype(str)
     out["aov"] = out["revenue"] / out["orders"]
     total = out["revenue"].sum()
@@ -328,9 +374,11 @@ def segment_summary(r: pd.DataFrame) -> pd.DataFrame:
 
 def first_purchase_month(df: pd.DataFrame) -> pd.Series:
     """customer_id -> month of first purchase. Call on the FULL dataset, not a filtered one."""
-    s = sales_rows(df, ["customer_id", "invoice_date"])
-    s = s[s["customer_id"].notna()]
-    return month_start(s.groupby("customer_id")["invoice_date"].min())
+    sale = df["is_product"].to_numpy() & ~df["is_cancellation"].to_numpy() & df["customer_id"].notna().to_numpy()
+    cust = df["customer_id"].to_numpy(dtype="int64", na_value=-1)[sale]
+    first = pd.Series(df["invoice_date"].to_numpy()[sale]).groupby(cust).min()
+    first.index.name = "customer_id"
+    return month_start(first)
 
 
 def cohort_table(df: pd.DataFrame, acquired: pd.Series) -> pd.DataFrame:
@@ -389,22 +437,26 @@ def basket_rules(df: pd.DataFrame, min_support: float = 0.01, max_items: int = 1
     s = sales_rows(df, ["invoice", "stock_code", "description"])
     if s.empty:
         return pd.DataFrame(columns=cols)
-    # Work on the integer category codes; converting 800k codes to strings costs ~100MB.
-    inv = s["invoice"].cat.codes.to_numpy()
-    item = s["stock_code"].cat.codes.to_numpy()
-    pairs_df = pd.DataFrame({"inv": inv, "item": item}).drop_duplicates()
-    n_baskets = pairs_df["inv"].nunique()
-    counts = pairs_df["item"].value_counts()
+    # Work on integer category codes: one (invoice, item) key per basket line, de-duplicated with np.unique.
+    inv = _codes(s["invoice"]).astype(np.int64)
+    item = _codes(s["stock_code"]).astype(np.int64)
+    n_codes = int(item.max()) + 1
+    keys = np.unique(inv * n_codes + item)
+    pair_inv, pair_item = keys // n_codes, keys % n_codes
+    n_baskets = int(np.unique(pair_inv).size)
+    counts = pd.Series(np.bincount(pair_item, minlength=n_codes))
+    counts = counts[counts > 0].sort_values(ascending=False, kind="stable")
     min_count = max(2, math.ceil(min_support * n_baskets))
     keep = counts[counts >= min_count].head(max_items)
     if len(keep) < 2:
         return pd.DataFrame(columns=cols)
-    pairs_df = pairs_df[pairs_df["item"].isin(keep.index)]
+    in_keep = np.isin(pair_item, keep.index.to_numpy())
+    pair_inv, pair_item = pair_inv[in_keep], pair_item[in_keep]
 
-    inv_idx, _ = pd.factorize(pairs_df["inv"])
-    item_idx, items = pd.factorize(pairs_df["item"])
+    inv_idx, _ = pd.factorize(pair_inv)
+    item_idx, items = pd.factorize(pair_item)
     x = sparse.csr_matrix(
-        (np.ones(len(pairs_df), dtype=np.int32), (inv_idx, item_idx)),
+        (np.ones(len(pair_inv), dtype=np.int32), (inv_idx, item_idx)),
         shape=(inv_idx.max() + 1, len(items)),
     )
     co = (x.T @ x).tocoo()
@@ -433,13 +485,20 @@ def basket_rules(df: pd.DataFrame, min_support: float = 0.01, max_items: int = 1
 # ---------------------------------------------------------------- returns & cancellations
 
 def cancellation_monthly(df: pd.DataFrame) -> pd.DataFrame:
-    cols = ["invoice_date", "revenue"]
-    s, c = sales_rows(df, cols), cancel_rows(df, cols)
-    gross = s.groupby(month_start(s["invoice_date"]))["revenue"].sum()
-    cancelled = -c.groupby(month_start(c["invoice_date"]))["revenue"].sum()
-    out = pd.DataFrame({"gross": gross, "cancelled": cancelled}).fillna(0.0)
-    out.index.name = "month"
-    out = out.reset_index()
+    product = df["is_product"].to_numpy()
+    cancel = df["is_cancellation"].to_numpy()[product]
+    if not product.any():
+        return pd.DataFrame(columns=["month", "gross", "cancelled", "cancel_rate"])
+    months = df["invoice_date"].to_numpy()[product].astype("datetime64[M]").astype(np.int64)
+    first = months.min()
+    idx = months - first
+    n = int(idx.max()) + 1
+    revenue = df["revenue"].to_numpy()[product]
+    gross = np.bincount(idx[~cancel], weights=revenue[~cancel], minlength=n)
+    cancelled = -np.bincount(idx[cancel], weights=revenue[cancel], minlength=n)
+    seen = np.bincount(idx, minlength=n) > 0
+    out = pd.DataFrame({"month": (np.arange(n) + first).astype("datetime64[M]").astype("datetime64[s]"),
+                        "gross": gross, "cancelled": cancelled})[seen].reset_index(drop=True)
     out["cancel_rate"] = np.where(out["gross"] > 0, out["cancelled"] / out["gross"].where(out["gross"] > 0, 1), np.nan)
     return out
 
