@@ -3,7 +3,8 @@ import streamlit as st
 from retail import charts as ch
 from retail import data
 
-f = data.page_header("Geography", "Where revenue comes from. Use *Exclude United Kingdom* in the sidebar to compare international markets.")
+f = data.page_header("Geography", "Where revenue comes from. Use *Exclude United Kingdom* in the sidebar "
+                                  "to compare international markets.")
 countries = data.compute("country_summary", f)
 if data.empty_state(countries, "sales"):
     st.stop()
@@ -18,8 +19,7 @@ if len(intl):
 else:
     m2.metric("Top international market", "–", border=True)
 m3.metric("UK share of revenue", ch.pct(uk.iloc[0]) if len(uk) else "excluded", border=True)
-m4.metric("International revenue", ch.money(countries.loc[countries["country"] != "United Kingdom", "revenue"].sum(), 2),
-          border=True)
+m4.metric("International revenue", ch.money(intl["revenue"].sum(), 2), border=True)
 
 ch.show(ch.choropleth(countries, title="Revenue by country"))
 unmapped = countries[countries["iso3"].isna()]

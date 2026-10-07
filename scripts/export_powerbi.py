@@ -211,10 +211,12 @@ MEASURES = [
     Measure("Segment Revenue", "dim_customer", "SUM(dim_customer[monetary])", GBP, "Customers",
             "Lifetime revenue of the customers in view."),
     Measure("Segment Customer Share", "dim_customer",
-            "DIVIDE([Segment Customers], CALCULATE([Segment Customers], ALL(dim_customer[segment], dim_customer[segment_order])))",
+            "DIVIDE([Segment Customers], "
+            "CALCULATE([Segment Customers], ALL(dim_customer[segment], dim_customer[segment_order])))",
             PCT, "Customers", "Share of all segmented customers."),
     Measure("Segment Revenue Share", "dim_customer",
-            "DIVIDE([Segment Revenue], CALCULATE([Segment Revenue], ALL(dim_customer[segment], dim_customer[segment_order])))",
+            "DIVIDE([Segment Revenue], "
+            "CALCULATE([Segment Revenue], ALL(dim_customer[segment], dim_customer[segment_order])))",
             PCT, "Customers", "Share of all segmented customers' revenue."),
     Measure("Retention %", "cohort_retention",
             "DIVIDE(SUM(cohort_retention[customers]), SUM(cohort_retention[cohort_size]))", PCT, "Cohorts",
@@ -339,7 +341,8 @@ def write_excel(frames: dict[str, pd.DataFrame]) -> Path:
     """
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
-    from openpyxl.worksheet.table import Table as XlTable, TableColumn, TableStyleInfo
+    from openpyxl.worksheet.table import Table as XlTable
+    from openpyxl.worksheet.table import TableColumn, TableStyleInfo
 
     path = DATA / "RetailAnalytics.xlsx"
     if len(frames["fact_sales"]) > EXCEL_MAX_ROWS:

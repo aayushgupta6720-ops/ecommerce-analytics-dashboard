@@ -1,0 +1,13 @@
+line-length = 120
+target-version = "py312"
+extend-exclude = [".cache", ".screenshots", "venv"]
+
+[lint]
+# pyflakes (F), pycodestyle errors/warnings (E, W), import order (I), pyupgrade (UP), bugbear (B)
+select = ["F", "E", "W", "I", "UP", "B"]
+# zip() here always pairs columns of the same frame, so strict= would only add noise.
+ignore = ["B905"]
+
+[lint.per-file-ignores]
+# Streamlit pages are scripts: imports at the top, page code runs top to bottom
+"views/*.py" = ["E402"]

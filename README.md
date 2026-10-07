@@ -1,5 +1,7 @@
 # E-Commerce Product Analytics Dashboard
 
+[![CI](https://github.com/aayushgupta6720-ops/ecommerce-analytics-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/aayushgupta6720-ops/ecommerce-analytics-dashboard/actions/workflows/ci.yml)
+
 An interactive analytics dashboard for the [UCI Online Retail II](https://archive.ics.uci.edu/dataset/502/online+retail+ii)
 dataset: 1,067,371 invoice lines from a UK online gift retailer, December 2009 to December 2011. It's built
 with Streamlit and Plotly, and there's a matching Power BI kit.
@@ -137,12 +139,21 @@ Memory was profiled for Render's 512 MB instance:
   counting, numpy bincounts for the landing-page metrics, and the memory-mapped Arrow load.
 - `MALLOC_ARENA_MAX=2` stops glibc from growing a memory arena per session thread.
 
-## Tests
+## Tests and CI
 
 ```bash
-./venv/bin/pytest
+./venv/bin/ruff check .   # lint
+./venv/bin/pytest          # tests
 ```
 
+GitHub Actions runs the same checks on every push and pull request (`.github/workflows/ci.yml`):
+1. Lint with ruff.
+2. Regenerate the Power BI kit and fail if the committed measures, project files or tie-out numbers
+   no longer match the app's code.
+3. Validate the Power BI project against Microsoft's published schemas.
+4. Run the full test suite.
+
+The tests cover:
 - **Metrics:** hand-worked fixtures covering KPIs, deltas, partial months, Pareto, RFM scoring and
   segments, cohorts (including the filter-relabelling case), basket support/confidence/lift, and returns.
 - **App:** every page rendered with default filters, a narrow filter (Portugal, one quarter) and an empty

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Regenerate the Power BI kit
+        run: python scripts/export_powerbi.py
+
+      # Measures, the PBIP project and the guides' tie-out numbers are generated from the app's code.
+      # If someone changes a metric without re-running the export, this step fails.
+      - name: Generated Power BI files are up to date
+        run: git diff --exit-code -- powerbi ':(exclude)powerbi/data'
+
+      - name: Validate the Power BI project against Microsoft's schemas
+        run: python scripts/validate_pbip.py
+
+      - name: Tests
+        run: pytest -q

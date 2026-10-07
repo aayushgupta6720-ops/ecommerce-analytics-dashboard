@@ -4,7 +4,8 @@ openpyxl==3.1.5
 # Power BI export (openpyxl above writes the workbook) and PBIP validation
 jsonschema==4.26.0
 referencing==0.37.0
-# Tests and screenshots
+# Tests, lint and screenshots
+ruff==0.16.10
 pytest==9.1.1
 psutil==7.2.2
 playwright==1.63.0

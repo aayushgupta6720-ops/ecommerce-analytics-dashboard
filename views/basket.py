@@ -40,8 +40,8 @@ pairs = view.assign(key=[tuple(sorted(p)) for p in zip(view["antecedent"], view[
 pairs = pairs.sort_values("confidence", ascending=False).drop_duplicates("key").nlargest(12, "lift")
 ch.show(ch.bar_h(ch.nice(pairs["antecedent_desc"], 34) + "  →  " + ch.nice(pairs["consequent_desc"], 34), pairs["lift"],
                  title="Strongest pairs by lift", fmt=lambda v: f"{v:.1f}×",
-                 hover=[f"{a} → {b}<br>lift {l:.1f}× · confidence {c:.0%} · in {n:,} orders"
-                        for a, b, l, c, n in zip(pairs["antecedent_desc"], pairs["consequent_desc"],
+                 hover=[f"{a} → {b}<br>lift {lift:.1f}× · confidence {c:.0%} · in {n:,} orders"
+                        for a, b, lift, c, n in zip(pairs["antecedent_desc"], pairs["consequent_desc"],
                                                  pairs["lift"], pairs["confidence"], pairs["pair_baskets"])]))
 st.caption("Many of the strongest pairs are colour or design variants of the same item, like the Poppy's "
            "Playhouse rooms or matching bowls. That points to bundles or \"complete the set\" prompts.")
@@ -57,8 +57,8 @@ with left:
 with right:
     also = view[view["antecedent"] == code].nlargest(10, "confidence")
     ch.show(ch.bar_h(ch.nice(also["consequent_desc"], 40), also["confidence"], title="…also bought", fmt=ch.pct,
-                     hover=[f"{d}<br>{c:.0%} of these orders · lift {l:.1f}×"
-                            for d, c, l in zip(also["consequent_desc"], also["confidence"], also["lift"])]))
+                     hover=[f"{d}<br>{c:.0%} of these orders · lift {lift:.1f}×"
+                            for d, c, lift in zip(also["consequent_desc"], also["confidence"], also["lift"])]))
 
 st.dataframe(
     view, hide_index=True, width="stretch", height=380,

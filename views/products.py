@@ -3,7 +3,8 @@ import streamlit as st
 from retail import charts as ch
 from retail import data, metrics
 
-f = data.page_header("Products", "Which products drive revenue, how concentrated sales are, and a per-product drill-down.")
+f = data.page_header("Products", "Which products drive revenue, how concentrated sales are, "
+                                 "and a per-product drill-down.")
 summary = data.compute("product_summary", f)
 if data.empty_state(summary, "product sales"):
     st.stop()

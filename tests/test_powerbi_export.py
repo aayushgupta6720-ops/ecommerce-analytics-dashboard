@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import export_powerbi as ex  # noqa: E402
+
 from retail import metrics  # noqa: E402
 
 
@@ -101,6 +102,7 @@ def test_workbook_sheets_are_excel_tables(frames):
     """The Power BI service only imports data formatted as Excel tables; names must match the model."""
     import re
     import zipfile
+
     from openpyxl.utils import get_column_letter
     # Read the table definitions straight from the xlsx; loading 1M rows through openpyxl is slow.
     with zipfile.ZipFile(ROOT / "powerbi" / "data" / "RetailAnalytics.xlsx") as z:

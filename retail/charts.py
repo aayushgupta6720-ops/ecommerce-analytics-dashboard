@@ -12,8 +12,8 @@ import string
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.colors import sample_colorscale
 import streamlit as st
+from plotly.colors import sample_colorscale
 
 FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
@@ -97,7 +97,8 @@ def _layout(fig: go.Figure, *, title: str | None = None, height: int = 360, lege
         margin=dict(l=4, r=16, t=(84 if legend else 44) if title else (40 if legend else 12), b=4),
         colorway=t["series"],
         showlegend=legend,
-        legend=dict(orientation="h", x=0, xanchor="left", y=1.0, yanchor="bottom", font=dict(color=t["text2"]), title=None),
+        legend=dict(orientation="h", x=0, xanchor="left", y=1.0, yanchor="bottom",
+                    font=dict(color=t["text2"]), title=None),
         hoverlabel=dict(bgcolor=t["surface"], bordercolor=t["axis"], font=dict(color=t["text"], family=FONT)),
         bargap=0.35,
         hovermode="closest",

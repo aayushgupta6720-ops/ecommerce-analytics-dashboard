@@ -26,13 +26,15 @@ with left:
                         partial=None, yfmt=".0%", tickprefix=""))
 with right:
     ch.show(ch.bar_v(monthly["month"], monthly["cancelled"], title="Cancelled value by month", height=360, yprefix="£",
-                     hover=[f"{m:%b %Y}: {ch.money(v)} cancelled" for m, v in zip(monthly["month"], monthly["cancelled"])]))
+                     hover=[f"{m:%b %Y}: {ch.money(v)} cancelled"
+                            for m, v in zip(monthly["month"], monthly["cancelled"])]))
 biggest = data.compute("largest_cancellations", f, n=5)
 if len(biggest):
     top2 = biggest.head(2)["share_of_cancelled"].sum()
     st.caption(f"A cancellation can refer to an order placed in an earlier month, so a single month's rate can spike. "
                f"The two largest single cancellations make up {top2:.0%} of all cancelled value (table below).")
-with st.expander("Largest single cancellations", expanded=bool(len(biggest)) and biggest.head(2)["share_of_cancelled"].sum() > 0.2):
+dominated = bool(len(biggest)) and biggest.head(2)["share_of_cancelled"].sum() > 0.2
+with st.expander("Largest single cancellations", expanded=dominated):
     st.dataframe(
         biggest, hide_index=True, width="stretch",
         column_config={

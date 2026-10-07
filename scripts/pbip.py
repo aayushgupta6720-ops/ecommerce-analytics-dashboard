@@ -131,7 +131,8 @@ def write_model(root: Path, tables, relationships, measures) -> None:
         "",
     ]))
     (d / "expressions.tmdl").write_text("\n".join([
-        "/// Folder holding the exported CSVs (keep the trailing backslash). Change it in Transform data > Edit parameters.",
+        "/// Folder holding the exported CSVs (keep the trailing backslash). "
+        "Change it in Transform data > Edit parameters.",
         f'expression DataFolder = "{DEFAULT_DATA_FOLDER}" meta [IsParameterQuery = true, Type = "Text", '
         "IsParameterQueryRequired = true]",
         f"\tlineageTag: {gid('expression/DataFolder')}",
