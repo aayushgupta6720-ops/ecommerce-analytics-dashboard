@@ -19,3 +19,10 @@ services:
       # they're freed, instead of raising the heap's high-water mark.
       - key: MALLOC_MMAP_THRESHOLD_
         value: "131072"
+      # Ask the data page. The two secrets are set in the Render dashboard, never committed.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ASK_PASSWORD
+        sync: false
+      - key: ASK_MODEL
+        value: gemini-3.5-flash-lite

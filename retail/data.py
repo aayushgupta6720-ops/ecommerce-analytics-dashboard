@@ -161,6 +161,32 @@ def sql_query(name: str, f: Filters) -> tuple[pd.DataFrame, float]:
     return result, elapsed
 
 
+@st.cache_data(show_spinner=False)
+def ask_context():
+    """Countries, products and customers that Ask-the-data requests are checked against."""
+    from retail import ask
+    ctx = ask.build_context(load_data())
+    _release_freed_memory()
+    return ctx
+
+
+@st.cache_resource(show_spinner=False)
+def ask_counter(cap: int):
+    """Site-wide count of today's free-text questions (shared by every session)."""
+    from retail import ask
+    return ask.DailyCounter(cap)
+
+
+@st.cache_data(max_entries=128, show_spinner=False)
+def ask_answer(spec):
+    """The answer to a validated Ask-the-data request (retail.ask.Spec)."""
+    from retail import ask
+    rfm_table = rfm(Filters(spec.start, spec.end, spec.countries)) if spec.group_by == "segment" else None
+    result = ask.answer(spec, load_data(), first=bounds()[0], rfm_table=rfm_table)
+    _release_freed_memory()
+    return result
+
+
 def kpis_with_deltas(f: Filters) -> tuple[dict, dict, Filters | None]:
     """Current KPIs, deltas vs the previous period of equal length (None if it predates the data)."""
     current = compute("kpis", f)

@@ -31,12 +31,18 @@ WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # ---------------------------------------------------------------- filtering helpers
 
+def filter_mask(df: pd.DataFrame, start: date, end: date, countries: tuple[str, ...] = ()) -> np.ndarray:
+    """Boolean row mask: invoice_date in [start, end] (inclusive days) and, if given, in `countries`."""
+    ts = df["invoice_date"]
+    mask = np.array((ts >= pd.Timestamp(start)) & (ts < pd.Timestamp(end) + pd.Timedelta(days=1)), dtype=bool)
+    if countries:
+        mask &= df["country"].isin(countries).to_numpy()
+    return mask
+
+
 def filter_frame(df: pd.DataFrame, start: date, end: date, countries: tuple[str, ...] = ()) -> pd.DataFrame:
     """Rows with invoice_date in [start, end] (inclusive days) and, if given, in `countries`."""
-    ts = df["invoice_date"]
-    mask = (ts >= pd.Timestamp(start)) & (ts < pd.Timestamp(end) + pd.Timedelta(days=1))
-    if countries:
-        mask &= df["country"].isin(countries)
+    mask = filter_mask(df, start, end, countries)
     # The unfiltered view is the common case; skip copying the whole frame for it.
     # Callers treat the result as read-only either way.
     return df if mask.all() else df[mask]
@@ -560,3 +566,108 @@ def largest_cancellations(df: pd.DataFrame, n: int = 5) -> pd.DataFrame:
     for col in ["invoice", "stock_code", "description", "country"]:
         out[col] = out[col].astype(str)
     return out.drop(columns="revenue").reset_index(drop=True)
+
+
+# ---------------------------------------------------------------- breakdown (Ask the data page)
+
+GROUPINGS = ("none", "year", "quarter", "month", "day", "weekday", "hour", "country", "product", "customer")
+TIME_GROUPINGS = ("year", "quarter", "month", "day")
+KPI_COLUMNS = ["revenue", "gross_sales", "orders", "customers", "aov", "units", "products",
+               "cancelled_value", "cancel_rate"]
+_PERIOD_STEP = {"year": pd.DateOffset(years=1), "quarter": pd.DateOffset(months=3),
+                "month": pd.DateOffset(months=1), "day": pd.DateOffset(days=1)}
+
+
+def _group_codes(df: pd.DataFrame, by: str) -> tuple[np.ndarray, pd.DataFrame]:
+    """A group code per row (-1 = left out) and the key columns, one row per code."""
+    n_rows = len(df)
+    if by == "none":
+        return np.zeros(n_rows, dtype=np.int64), pd.DataFrame({"group": ["All"]})
+    if by in ("country", "product"):
+        column = "country" if by == "country" else "stock_code"
+        codes, labels = _codes_labels(df[column])
+        return codes.astype(np.int64), pd.DataFrame({column: labels.astype(str)})
+    if by == "customer":
+        ids = df["customer_id"].to_numpy(dtype="int64", na_value=-1)
+        known = ids >= 0
+        labels, inverse = np.unique(ids[known], return_inverse=True)
+        codes = np.full(n_rows, -1, dtype=np.int64)
+        codes[known] = inverse
+        return codes, pd.DataFrame({"customer_id": labels})
+    ts = df["invoice_date"].to_numpy()
+    if by == "weekday":  # 1970-01-01, day 0, was a Thursday
+        return (ts.astype("datetime64[D]").astype(np.int64) + 3) % 7, pd.DataFrame({"weekday": WEEKDAYS})
+    if by == "hour":
+        return ts.astype("datetime64[h]").astype(np.int64) % 24, pd.DataFrame({"hour": np.arange(24)})
+    if by not in TIME_GROUPINGS:
+        raise ValueError(f"unknown grouping {by!r}")
+    unit = "D" if by == "day" else "Y" if by == "year" else "M"
+    idx = ts.astype(f"datetime64[{unit}]").astype(np.int64)
+    if by == "quarter":
+        idx = idx // 3
+    first = int(idx.min()) if n_rows else 0
+    periods = np.arange(first, int(idx.max()) + 1 if n_rows else 0)
+    starts = (periods * 3 if by == "quarter" else periods).astype(f"datetime64[{unit}]").astype("datetime64[s]")
+    return idx - first, pd.DataFrame({by: starts})
+
+
+def breakdown(df: pd.DataFrame, by: str = "none", mask: np.ndarray | None = None,
+              start: date | None = None, end: date | None = None) -> pd.DataFrame:
+    """Every headline KPI per group, with kpis()' definitions: each row equals kpis() on that group's rows,
+    except that an order whose lines straddle a period boundary counts once, in its first line's period.
+
+    `by` is one of GROUPINGS ("none" gives a single row for the whole slice); `mask` narrows the rows
+    without copying the frame. Groups with no product lines are dropped, and customer groups leave out
+    guest lines (no customer ID). Ratios are NaN where undefined (no orders, or no gross sales). Time
+    groups get `partial` when the [start, end] window covers only part of the period.
+    """
+    codes, keys = _group_codes(df, by)
+    n = len(keys)
+    product = df["is_product"].to_numpy() & (codes >= 0)
+    if mask is not None:
+        product &= mask
+    is_cancel = df["is_cancellation"].to_numpy()
+    sale, cancel = product & ~is_cancel, product & is_cancel
+    revenue = df["revenue"].to_numpy()
+    sale_codes = codes[sale]
+    gross = np.bincount(sale_codes, weights=revenue[sale], minlength=n)
+    cancelled = -np.bincount(codes[cancel], weights=revenue[cancel], minlength=n)
+    invoices = _codes(df["invoice"])[sale]
+    if by in TIME_GROUPINGS or by in ("weekday", "hour"):
+        # An order counts once, in its first line's period (as in monthly_revenue and weekday_hour): a few
+        # invoices have lines either side of a minute boundary, which can fall in different periods.
+        _, first_line = np.unique(invoices, return_index=True)
+        orders = np.bincount(sale_codes[first_line], minlength=n)
+    else:
+        orders = _distinct_count(sale_codes, invoices, n)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        aov = np.where(orders > 0, (gross - cancelled) / orders, np.nan)
+        cancel_rate = np.where(gross > 0, cancelled / gross, np.nan)
+    out = keys.assign(
+        revenue=gross - cancelled,
+        gross_sales=gross,
+        orders=orders,
+        customers=_distinct_count(sale_codes, df["customer_id"].to_numpy(dtype="int64", na_value=-1)[sale], n),
+        aov=aov,
+        units=np.bincount(codes[product], weights=df["quantity"].to_numpy()[product], minlength=n).round()
+        .astype(np.int64),
+        products=_distinct_count(sale_codes, _codes(df["stock_code"])[sale], n),
+        cancelled_value=cancelled,
+        cancel_rate=cancel_rate,
+    )
+    keep = np.bincount(codes[product], minlength=n) > 0
+    if by == "product":
+        # Description of each product's first line, looked up by category code (as in product_summary).
+        first_line = np.full(n, -1)
+        rows = np.flatnonzero(product)
+        uniq, first = np.unique(codes[rows], return_index=True)
+        first_line[uniq] = rows[first]
+        desc_codes, desc_labels = _codes_labels(df["description"])
+        desc = np.full(n, "", dtype=object)
+        desc[keep] = desc_labels[desc_codes[first_line[keep]]].astype(str)
+        out.insert(1, "description", desc)
+    out = out[keep].reset_index(drop=True)
+    if by in TIME_GROUPINGS and start is not None and end is not None:
+        period_end = out[by] + _PERIOD_STEP[by] - pd.Timedelta(days=1)
+        out["partial"] = (out[by] < pd.Timestamp(start)) | (period_end > pd.Timestamp(end))
+    return out

@@ -14,3 +14,6 @@ data/processed/*.feather
 # python scripts/export_powerbi.py
 powerbi/data/*
 !powerbi/data/.gitkeep
+
+# Local secrets (GEMINI_API_KEY, ASK_PASSWORD) for the Ask the data page
+.env

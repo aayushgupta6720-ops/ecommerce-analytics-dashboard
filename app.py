@@ -15,6 +15,7 @@ st.set_page_config(page_title="Retail Analytics", page_icon=":material/storefron
 PAGES = [
     st.Page("views/overview.py", title="Overview", icon=":material/dashboard:", default=True),
     st.Page("views/insights.py", title="Insights & actions", icon=":material/lightbulb:"),
+    st.Page("views/ask.py", title="Ask the data", icon=":material/forum:"),
     st.Page("views/products.py", title="Products", icon=":material/inventory_2:"),
     st.Page("views/geography.py", title="Geography", icon=":material/public:"),
     st.Page("views/customers.py", title="Customers (RFM)", icon=":material/group:"),

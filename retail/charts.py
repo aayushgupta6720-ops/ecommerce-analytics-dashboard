@@ -148,7 +148,7 @@ def bar_v(x: pd.Series, y: pd.Series, *, title: str, fmt=money, height: int = 30
 
 
 def timeline(df: pd.DataFrame, x: str, y: str, *, title: str, fmt=money, partial: str | None = "partial",
-             yfmt: str = "~s", tickprefix: str = "£") -> go.Figure:
+             yfmt: str = "~s", tickprefix: str = "£", xfmt: str = "%b %Y") -> go.Figure:
     """Single-series line; partial periods get a hollow marker and a note."""
     t = tok()
     is_partial = df[partial] if partial and partial in df else pd.Series(False, index=df.index)
@@ -160,7 +160,7 @@ def timeline(df: pd.DataFrame, x: str, y: str, *, title: str, fmt=money, partial
             color=[t["surface"] if p else t["series"][0] for p in is_partial],
             line=dict(color=[t["series"][0] if p else t["surface"] for p in is_partial], width=2),
         ),
-        hovertext=[f"{d:%b %Y}{' (partial month)' if p else ''}<br>{fmt(v)}"
+        hovertext=[f"{d.strftime(xfmt)}{' (partial month)' if p else ''}<br>{fmt(v)}"
                    for d, v, p in zip(df[x], df[y], is_partial)],
         hovertemplate="%{hovertext}<extra></extra>",
     ))

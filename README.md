@@ -13,7 +13,7 @@ which sleeps after 15 minutes idle, so the first visit can take about a minute t
 
 ## What's in it
 
-Ten pages. The seven analysis pages respond to the sidebar filters (period, countries, *Exclude United Kingdom*), and the SQL page runs its queries with them too. Insights and Predictions use the full two years.
+Eleven pages. The seven analysis pages respond to the sidebar filters (period, countries, *Exclude United Kingdom*), and the SQL page runs its queries with them too. Insights and Predictions use the full two years, and Ask the data takes its period and countries from the question.
 
 | Page | What it answers |
 |---|---|
@@ -25,6 +25,7 @@ Ten pages. The seven analysis pages respond to the sidebar filters (period, coun
 | **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. |
 | **Returns & cancellations** | Cancellation rate over time, largest single cancellations, most-cancelled products, and cancellations by country and by customer. |
 | **Insights & actions** | Five prioritised recommendations, each with evidence, an action, value at stake under adjustable assumptions, and a KPI; downloadable win-back and watch lists. |
+| **Ask the data** | Type a question in plain English ("top 5 products by units in November 2010") and get the answer as a number, chart or table, computed by the same metric code as every other page. |
 | **Predictions** | Revenue forecast, churn risk and customer lifetime value, each trained on 2010 and scored on the following year against a baseline. |
 | **SQL queries** | The core metrics (KPIs, monthly revenue, products, RFM, cohorts) as SQL, run live by DuckDB on the Parquet file. |
 
@@ -114,6 +115,39 @@ It also shows what was **considered and not prioritised**. "Complete the set" pr
 pairs would be worth at most about £22K, even if every order missing a partner item had added it. The page
 shows that too, because knowing what not to do matters as much.
 
+## Ask the data
+
+Type a question in plain English and get the answer from the data. The language model (Gemini 3.5 Flash-Lite,
+free tier) has one job: turn the question into a small structured request. **It never writes code or produces
+the numbers.**
+
+1. **Question → request.** One call with a JSON schema whose fields are fixed lists: measure (net revenue, gross
+   sales, orders, customers, AOV, units, distinct products, cancelled value, cancellation rate), period,
+   countries or regions, product words, customer number, grouping (none, year, quarter, month, day, weekday,
+   hour, country, product, customer, RFM segment), order, row limit and an optional comparison (previous
+   period, or the same period a year earlier). Questions it can't express, like forecasts or "bought
+   together", are declined, with a pointer to the page that answers them.
+2. **Validation in Python** ([`retail/ask.py`](retail/ask.py)):
+   - Dates are clamped to the data, and relative dates count back from the data's last day.
+   - Country near-misses are corrected with a note ("Holland" → Netherlands).
+   - Product words are matched against real descriptions; when nothing matches, the closest are suggested.
+   - Unsupported combinations get a plain message.
+3. **The answer** comes from `metrics.breakdown`, which computes every KPI per group with numpy bincounts. A
+   test checks that each group's row equals `kpis()` run on that group's rows.
+4. **The page shows how it read the question**, as a sentence written by code from the request (not by the
+   model), plus an *Adjust* panel to correct the reading without asking again.
+
+**Evaluation.** [`scripts/eval_ask.py`](scripts/eval_ask.py) runs 28 golden questions: 23 answerable and 5 that
+should be declined. A question passes when the model's request matches the expected one field by field and the
+answer equals a reference figure computed independently by the existing functions (`kpis`, `monthly_revenue`,
+`product_summary`, `country_summary`, `rfm`, `cancellation_monthly`). `--offline` substitutes the expected
+requests for the model, which checks the answer code against those references: 28/28. The passing questions
+become the page's example gallery.
+
+**Access.** Free-text questions are password-protected, because each one uses the free daily quota. They're
+also capped at 300 a day site-wide and 30 per session. Without the password, the examples and the Adjust panel
+(a manual query builder) still work, because neither calls the model.
+
 ## Predictions
 
 Each model is trained on data up to 9 Dec 2010 and scored on the following 365 days, which it never saw,
@@ -162,9 +196,10 @@ retail/charts.py       Plotly builders sharing one palette in light and dark the
 retail/countries.py    country names -> ISO-3 codes and regions
 retail/models.py       BG/NBD, Gamma-Gamma, logistic regression, forecast baselines, evaluation helpers
 retail/insights.py     the evidence behind each recommendation on the Insights page
+retail/ask.py          Ask the data: request schema, validation, answers and the Gemini call
 retail/sql.py          runs sql/*.sql with DuckDB on the Parquet file
 sql/                   the metrics as SQL (KPIs, monthly revenue, products, RFM, cohorts)
-scripts/               dataset build, model training, Power BI export, PBIP generator + validator
+scripts/               dataset build, model training, Ask-the-data eval, Power BI export, PBIP tools
 powerbi/               Power BI kit (see powerbi/BUILD_GUIDE.md)
 tests/                 metrics, SQL-vs-pandas equivalence, models, page smoke tests, Power BI export checks
 ```
@@ -192,6 +227,9 @@ point. The data files aren't committed because they're large; the export regener
 - **Build**: installs `requirements.txt`, then converts the parquet file to an uncompressed Arrow file.
   The app memory-maps that file at startup.
 - **Start**: `streamlit run app.py` on `$PORT`, with health check `/_stcore/health`.
+- **Secrets** for Ask the data, set in the Render dashboard (never committed): `GEMINI_API_KEY` and
+  `ASK_PASSWORD`. Without them, the page still serves the examples and the manual builder. For local runs, put
+  them in a `.env` file (gitignored).
 
 Memory was profiled for Render's 512 MB instance:
 - On the live instance the app idles at about 100 MB and peaked at about 440 MB while every page was visited in
@@ -228,6 +266,10 @@ The tests cover:
   guests and bundle opportunities.
 - **Models:** parameter recovery on simulated customers for BG/NBD and Gamma-Gamma, coefficient recovery for
   the logistic regression, AUC against a brute-force count, and hand-checked dataset builders.
+- **Ask the data:** request validation (dates, country aliases and near-misses, product matching, unsupported
+  combinations), answers against `kpis()`, the Gemini call with a stubbed transport (schema sent, quota and
+  retry handling, unusable replies), the password check, the daily cap, and the page's locked and unlocked
+  flows.
 - **Power BI export:** foreign-key integrity, column order vs the model, totals equal to the app's KPIs,
   the workbook round-trip, and PBIP validation.
 

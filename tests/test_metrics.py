@@ -189,3 +189,69 @@ def test_order_cancelled_in_full_nets_to_zero():
     assert (r.loc[7, "monetary"], r.loc[8, "monetary"]) == (0, 50)
     assert m.country_summary(df).set_index("country").loc["France", "revenue"] == 50
     assert m.product_detail(df, "20001")["monthly"]["revenue"].sum() == 0
+
+
+# ---------------------------------------------------------------- breakdown
+
+def _row_keys(df: pd.DataFrame, by: str) -> pd.Series:
+    """Each row's group, worked out with plain pandas (independently of breakdown's bincounts)."""
+    ts = df["invoice_date"]
+    return {
+        "none": pd.Series("All", index=df.index),
+        "year": ts.dt.to_period("Y").dt.start_time, "quarter": ts.dt.to_period("Q").dt.start_time,
+        "month": ts.dt.to_period("M").dt.start_time, "day": ts.dt.normalize(),
+        "weekday": ts.dt.dayofweek.map(dict(enumerate(m.WEEKDAYS))), "hour": ts.dt.hour,
+        "country": df["country"].astype(str), "product": df["stock_code"].astype(str),
+        "customer": df["customer_id"],
+    }[by]
+
+
+@pytest.mark.parametrize("by", m.GROUPINGS)
+def test_breakdown_rows_equal_kpis_on_each_group(tiny, by):
+    out = m.breakdown(tiny, by)
+    keys = _row_keys(tiny, by)
+    assert len(out) == keys[tiny["is_product"]].nunique()
+    for _, row in out.iterrows():
+        part = tiny[(keys == row.iloc[0]).fillna(False).to_numpy()]
+        k = m.kpis(part)
+        for col in ["revenue", "gross_sales", "orders", "customers", "units", "cancelled_value"]:
+            assert row[col] == pytest.approx(k[col]), (by, row.iloc[0], col)
+        assert row["products"] == m.sales_rows(part)["stock_code"].nunique()
+        if k["orders"]:
+            assert row["aov"] == pytest.approx(k["aov"])
+        else:
+            assert pd.isna(row["aov"])  # e.g. a group with only a cancellation
+
+
+def test_breakdown_totals_and_guests(tiny):
+    total = m.kpis(tiny)
+    for by in ["month", "country", "product", "weekday", "hour"]:
+        out = m.breakdown(tiny, by)
+        assert out["revenue"].sum() == pytest.approx(total["revenue"])
+        assert out["orders"].sum() == total["orders"] or by == "product"  # an order can hold several products
+    # Customer groups leave out the guest's 40 (Germany, no customer ID).
+    assert m.breakdown(tiny, "customer")["revenue"].sum() == pytest.approx(total["revenue"] - 40)
+
+
+def test_breakdown_mask_matches_filtering(tiny):
+    mask = m.filter_mask(tiny, date(2010, 2, 1), date(2010, 2, 28), ("United Kingdom",))
+    pd.testing.assert_frame_equal(m.breakdown(tiny, "product", mask), m.breakdown(tiny[mask], "product"))
+    assert m.breakdown(tiny, "month", mask=~tiny["invoice"].notna().to_numpy()).empty
+
+
+def test_breakdown_product_descriptions_and_partial_periods(tiny):
+    products = m.breakdown(tiny, "product").set_index("stock_code")
+    assert products.loc["10003", "description"] == "ITEM 10003"
+    months = m.breakdown(tiny, "month", start=date(2010, 1, 10), end=date(2010, 2, 28))
+    assert months["partial"].tolist() == [True, False]  # January starts on the 10th; February is whole
+    assert m.breakdown(tiny, "year", start=date(2010, 1, 1), end=date(2010, 2, 28))["partial"].tolist() == [True]
+
+
+def test_breakdown_counts_an_order_once_across_a_period_boundary():
+    df = make_frame([
+        ("3001", "2010-03-01 10:59", "30001", 1, 5.0, 9, "France"),
+        ("3001", "2010-03-01 11:00", "30002", 1, 5.0, 9, "France"),  # same invoice, the next minute
+    ])
+    hours = m.breakdown(df, "hour")
+    assert hours["orders"].tolist() == [1, 0]  # counted in its first line's hour, as on the Overview heatmap
+    assert hours["revenue"].tolist() == [5, 5]

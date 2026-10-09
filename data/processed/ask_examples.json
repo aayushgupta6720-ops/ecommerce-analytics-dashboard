@@ -1,0 +1,123 @@
+[
+  {
+    "question": "What was the net revenue in 2011?",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "revenue",
+      "start": "2011-01-01",
+      "end": "2011-12-31",
+      "countries": [],
+      "product": "",
+      "customer_id": "",
+      "group_by": "none",
+      "sort": "natural",
+      "limit": 10,
+      "compare": "none"
+    }
+  },
+  {
+    "question": "Show monthly revenue for 2011",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "revenue",
+      "start": "2011-01-01",
+      "end": "2011-12-31",
+      "countries": [],
+      "product": "",
+      "customer_id": "",
+      "group_by": "month",
+      "sort": "natural",
+      "limit": 10,
+      "compare": "none"
+    }
+  },
+  {
+    "question": "Top 5 countries by revenue outside the UK in 2011",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "revenue",
+      "start": "2011-01-01",
+      "end": "2011-12-31",
+      "countries": [
+        "International"
+      ],
+      "product": "",
+      "customer_id": "",
+      "group_by": "country",
+      "sort": "desc",
+      "limit": 5,
+      "compare": "none"
+    }
+  },
+  {
+    "question": "Which 3 products sold the most units in November 2010?",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "units",
+      "start": "2010-11-01",
+      "end": "2010-11-30",
+      "countries": [],
+      "product": "",
+      "customer_id": "",
+      "group_by": "product",
+      "sort": "desc",
+      "limit": 3,
+      "compare": "none"
+    }
+  },
+  {
+    "question": "How many Champions are there?",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "customers",
+      "start": "",
+      "end": "",
+      "countries": [],
+      "product": "",
+      "customer_id": "",
+      "group_by": "segment",
+      "sort": "natural",
+      "limit": 10,
+      "compare": "none"
+    }
+  },
+  {
+    "question": "Revenue from the regency cakestand in 2011",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "revenue",
+      "start": "2011-01-01",
+      "end": "2011-12-31",
+      "countries": [],
+      "product": "regency cakestand",
+      "customer_id": "",
+      "group_by": "none",
+      "sort": "natural",
+      "limit": 10,
+      "compare": "none"
+    }
+  },
+  {
+    "question": "How did orders over the last 3 months compare with a year earlier?",
+    "request": {
+      "answerable": true,
+      "reason": "",
+      "metric": "orders",
+      "start": "2011-09-10",
+      "end": "2011-12-09",
+      "countries": [],
+      "product": "",
+      "customer_id": "",
+      "group_by": "none",
+      "sort": "natural",
+      "limit": 10,
+      "compare": "last_year"
+    }
+  }
+]
