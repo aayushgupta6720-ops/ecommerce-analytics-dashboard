@@ -140,9 +140,10 @@ the numbers.**
 **Evaluation.** [`scripts/eval_ask.py`](scripts/eval_ask.py) runs 28 golden questions: 23 answerable and 5 that
 should be declined. A question passes when the model's request matches the expected one field by field and the
 answer equals a reference figure computed independently by the existing functions (`kpis`, `monthly_revenue`,
-`product_summary`, `country_summary`, `rfm`, `cancellation_monthly`). `--offline` substitutes the expected
-requests for the model, which checks the answer code against those references: 28/28. The passing questions
-become the page's example gallery.
+`product_summary`, `country_summary`, `rfm`, `cancellation_monthly`). **Live result: 28/28 with
+gemini-3.5-flash-lite** (10 Oct 2026). `--offline` substitutes the expected requests for the model, which checks
+the answer code alone against the references (also 28/28). The passing questions become the page's example
+gallery.
 
 **Access.** Free-text questions are password-protected, because each one uses the free daily quota. They're
 also capped at 300 a day site-wide and 30 per session. Without the password, the examples and the Adjust panel
