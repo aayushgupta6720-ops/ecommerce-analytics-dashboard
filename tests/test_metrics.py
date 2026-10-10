@@ -84,6 +84,14 @@ def test_quintile_scores():
     assert list(m._quintile(pd.Series(range(1, 11)), ascending=False)) == [5, 5, 4, 4, 3, 3, 2, 2, 1, 1]
 
 
+def test_tied_values_share_a_score_whatever_the_row_order():
+    values = pd.Series([1, 1, 1, 1, 2, 3, 4, 5, 6, 7])  # four customers with one order each
+    scores = m._quintile(values)
+    assert scores[:4].nunique() == 1 and scores.iloc[0] == 1
+    shuffled = values.sample(frac=1, random_state=3)
+    assert m._quintile(shuffled).sort_index().equals(scores)
+
+
 def test_segment_lookup_covers_every_score():
     assert len(m.SEGMENT_LOOKUP) == 25
     assert set(m.SEGMENT_LOOKUP.values()) == set(m.SEGMENTS)

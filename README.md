@@ -20,7 +20,7 @@ Eleven pages. The seven analysis pages respond to the sidebar filters (period, c
 | **Overview** | Revenue, orders, customers, AOV, units and cancellation rate, with change vs the previous period. Monthly trend with a year-over-year view. Weekday × hour heatmap. Top countries. |
 | **Products** | Top N products by revenue, units or orders. Pareto curve (22% of products bring in 80% of revenue). Per-product drill-down: monthly sales, price points, countries. |
 | **Geography** | Choropleth, country table, highest average order values, revenue by region. |
-| **Customers (RFM)** | Recency/Frequency/Monetary scores and 10 segments. Customer share vs revenue share (Champions are 14% of customers and 52% of revenue). Every-customer scatter. CSV export. |
+| **Customers (RFM)** | Recency/Frequency/Monetary scores and 10 segments. Customer share vs revenue share (Champions are 14% of identified customers and 52% of their revenue). Every-customer scatter. CSV export. |
 | **Cohort retention** | Monthly acquisition cohorts × months since first order: retention %, active customers or revenue. |
 | **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. |
 | **Returns & cancellations** | Cancellation rate over time, largest single cancellations, most-cancelled products, and cancellations by country and by customer. |
@@ -88,7 +88,9 @@ code, unit-tested on hand-computed fixtures.
   cancelled in full account for 34% of all cancelled value; the Returns page shows them.
 - **RFM**:
   - The snapshot date is the day after the selected period ends.
-  - Scores are quintiles taken on rank, so ties and small selections never produce duplicate bin edges.
+  - Scores are quintiles taken on rank, so small selections never produce duplicate bin edges. Tied values share
+    a score (the rank their group starts at), so two customers with the same recency and frequency are always
+    in the same segment.
   - Segments come from the standard 10-segment map of R and F scores.
 - **Cohorts**: a customer's cohort is the month of their first purchase in the **full** dataset, so
   narrowing the date filter never relabels a returning customer as new. The Dec 2009 cohort also holds
@@ -105,11 +107,16 @@ page, using the defaults shown below. They're sized opportunities, not forecasts
 
 | # | Recommendation | Evidence | Value at stake (default assumption) |
 |---|---|---|---|
-| 1 | Keep Champions buying (VIP tier, monthly watch list from the churn model) | 14% of customers bring in 52% of revenue (£4.5M in the last year); none currently in the riskiest 20% | £225K a year protected if a VIP tier keeps 5% of their revenue |
-| 2 | Win back lapsed high-value customers, with a hold-out group | 831 At Risk / Can't Lose customers spent £1.18M in their last active year | £118K a year at a 10% win-back rate |
+| 1 | Keep Champions buying (VIP tier, monthly watch list from the churn model) | 14% of identified customers bring in 52% of their revenue (£4.5M in the last year); none currently in the riskiest 20% | £224K a year protected if a VIP tier keeps 5% of their revenue |
+| 2 | Win back lapsed high-value customers, with a hold-out group | 713 At Risk / Can't Lose customers spent £1.13M in their last active year | £113K a year at a 10% win-back rate |
 | 3 | Plan stock and staff for September–November | 36–38% of annual revenue in both years; November about 1.8× an average month | £70K a season if 2% of peak demand is lost today |
-| 4 | Turn guest checkouts into accounts | 13% of gross sales (£1.3M a year) come from orders that can't be contacted | £382K a year made reachable at 30% conversion |
-| 5 | Confirm bulk orders before picking | 40 cancelled lines of 1,000+ units are 40% of cancelled value; about 13 large lines a month to check | £14K a year of handling at 10% of goods value |
+| 4 | Link web-shop orders to customer records | 13% of gross sales (£1.3M a year) have no customer ID; 69% of that is the retailer's own web shop (DOTCOM POSTAGE orders, 1 unit per line at about 2× the wholesale price) | £382K a year made analysable if 30% is linked |
+| 5 | Check unusual quantities at order entry | 4 mistyped lines (80,995 and 74,215 units among them, cancelled within the hour) are 35% of cancelled value; a check on lines 50× a product's usual flags about 11 a month and catches all 4 | £1.8K a year of handling on the genuine large cancellations; mainly insurance |
+
+Two of them were reframed after a review of the evidence. Orders without a customer ID had been read as wholesale
+buyers skipping a login, but they're mostly consumer orders from the web shop, so the segments, churn model and
+win-back list cover the wholesale accounts only. And the largest cancellations, once read as bulk orders cancelled
+after picking, were quantities typed wrong and cancelled minutes later.
 
 It also shows what was **considered and not prioritised**. "Complete the set" prompts for the strongest product
 pairs would be worth at most about £22K, even if every order missing a partner item had added it. The page
@@ -153,16 +160,16 @@ also capped at 300 a day site-wide and 30 per session. Without the password, the
 
 ## Predictions
 
-Each model is trained on data up to 9 Dec 2010 and scored on the following 365 days, which it never saw,
-against a simple baseline. The models are implemented with numpy/scipy in [`retail/models.py`](retail/models.py),
+Each model is scored on a period it never saw, against a simple baseline: the forecast and lifetime value on the
+365 days after 9 Dec 2010, churn on the 90 days after 11 Sep 2011 (trained on the same season a year earlier). The models are implemented with numpy/scipy in [`retail/models.py`](retail/models.py),
 so the 512 MB server needs no ML framework; `scripts/train_models.py` fits them and writes the results the page
 reads, and CI checks those results are reproducible.
 
-| Model | Result on the holdout year | Baseline |
+| Model | Result on unseen data | Baseline |
 |---|---|---|
 | **Revenue forecast**, 12 months ahead | Same month last year misses by **8.4%** (WAPE) | 3-month average 48.7%, last month 80.0% |
-| **Churn** (no purchase in the next 90 days), logistic regression | AUC **0.759**; 77% of the riskiest 20% churned (base rate 49%) | "Longest since last order": AUC 0.707 |
-| **Customer lifetime value**, BG/NBD + Gamma-Gamma | Purchase error 2.36 per customer; revenue ranking (Spearman) 0.588 | Calibration-year rate 2.63; last year's spend 0.618 |
+| **Churn** (no purchase in the next 90 days), logistic regression on 8 features | AUC **0.759**; 77% of the riskiest 20% churned (base rate 49%) | "Longest since last order": AUC 0.707. The same regression on recency and frequency alone: **0.758** (gap +0.001, 95% interval −0.006 to +0.008) |
+| **Customer lifetime value**, BG/NBD + Gamma-Gamma | Purchase error 2.36 per customer; revenue ranking (Spearman) 0.588 | Calibration-year rate 2.63; last year's spend **0.618** (gap −0.031, 95% interval −0.046 to −0.016) |
 
 ![Predictions page: 12-month-ahead forecast vs actual](docs/screenshots/predictions-forecast.png)
 
@@ -171,9 +178,12 @@ What the evaluation showed, and the page says plainly:
 - **Churn rates swing with the season.** About 42% of customers lapse in the 90 days after a September cutoff,
   against 63–69% after December–June cutoffs. So the churn model trains on the same season a year earlier: it
   ranks customers well, but its probabilities need re-basing each season.
+- **Two features do the churn model's work.** It beats the recency rule clearly (+0.051 AUC, 95% interval +0.038
+  to +0.063, resampling customers), but recency and frequency alone in the same regression score 0.758. The other
+  six features add nothing measurable.
 - **The lifetime-value model is for ranking, not totals.** It cuts purchase-count error for customers with little
-  history (2.47 vs 3.14), ranks about as well as last year's spend, and over-predicts total purchases by
-  42%.
+  history (2.47 vs 3.14), but ranks revenue slightly worse than last year's spend (0.588 vs 0.618, an interval
+  that excludes zero), and over-predicts total purchases by 42%. To rank customers by value, use last year's spend.
   BG/NBD also gives every one-time buyer P(alive) = 1, so expected purchases is used for ranking instead.
 - Both statistical models are tested by **parameter recovery**: simulate customers from known parameters, fit,
   and check the fit recovers them and predicts the simulated future.

@@ -7,9 +7,11 @@ from retail import data, models
 st.header("Predictions")
 m = data.model_metrics()
 st.caption(
-    f"Three models, each trained on data up to **{pd.Timestamp(m['calibration_end']):%d %b %Y}** and scored on the "
-    f"following year (to {pd.Timestamp(m['holdout_end']):%d %b %Y}), which they never saw. Every model is compared "
-    "with a simple baseline. This page uses that fixed split, so the sidebar filters don't apply here. "
+    f"Three models, each scored on a period it never saw: the forecast and lifetime value on the year after "
+    f"**{pd.Timestamp(m['calibration_end']):%d %b %Y}** (to {pd.Timestamp(m['holdout_end']):%d %b %Y}), churn on the "
+    f"**{m['churn']['horizon_days']} days after {pd.Timestamp(m['churn']['test_cutoff']):%d %b %Y}**. Every model is "
+    "compared with a simple baseline, with a 95% interval where the gap is small. This page uses that fixed split, "
+    "so the sidebar filters don't apply here. "
     "Models are implemented with numpy/scipy in `retail/models.py` and retrained by `scripts/train_models.py`."
 )
 
@@ -48,26 +50,36 @@ with forecast_tab:
 with churn_tab:
     c = m["churn"]
     scores = data.model_table("churn")
+    vs_rf = c["auc_gap_vs_recency_frequency"]
     st.markdown(
-        f"**Verdict: good at ranking who will lapse; re-base the probabilities each season.** Of the customers "
-        f"active in the year before {pd.Timestamp(c['test_cutoff']):%d %b %Y}, {ch.pct(c['test_churn_rate'], 0)} made "
-        f"no purchase in the next {c['horizon_days']} days. The model, trained on the same season a year earlier "
-        f"({pd.Timestamp(c['train_cutoff']):%d %b %Y}), ranks them better than the obvious rule, *longest since last "
-        "order*."
+        f"**Verdict: two numbers do the work; re-base the probabilities each season.** Of the customers active in "
+        f"the year before {pd.Timestamp(c['test_cutoff']):%d %b %Y}, {ch.pct(c['test_churn_rate'], 0)} made no "
+        f"purchase in the next {c['horizon_days']} days. The model, trained on the same season a year earlier "
+        f"({pd.Timestamp(c['train_cutoff']):%d %b %Y}), ranks them clearly better than *longest since last order*. "
+        f"But the same regression on just days since last order and purchase days last year does as well: the "
+        f"other {len(c['coefficients']) - 3} features add {vs_rf['gap']:+.3f} AUC (95% interval {vs_rf['low']:+.3f} to "
+        f"{vs_rf['high']:+.3f}), which is nothing measurable."
     )
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Model AUC", f"{c['auc_model']:.3f}",
-              f"{c['auc_model'] - c['auc_recency_baseline']:+.3f} vs recency rule", border=True,
-              help="Chance a random churner is scored above a random non-churner. 0.5 = coin flip.")
-    k2.metric("Churners in the top 20% riskiest", ch.pct(c["precision_top20"]),
+    k1, k2, k3, k4 = st.columns(4)
+    vs_r = c["auc_gap_vs_recency"]
+    k1.metric("Model AUC", f"{c['auc_model']:.3f}", f"{vs_r['gap']:+.3f} vs recency rule", border=True,
+              help="Chance a random churner is scored above a random non-churner. 0.5 = coin flip. 95% interval "
+                   f"for the gain over the recency rule: {vs_r['low']:+.3f} to {vs_r['high']:+.3f}.")
+    k2.metric("Recency + frequency only", f"{c['auc_recency_frequency']:.3f}",
+              f"{vs_rf['gap']:+.3f} for the other features", delta_color="off", border=True,
+              help="The same logistic regression with two features. The interval for the full model's gain over "
+                   f"it, from resampling customers: {vs_rf['low']:+.3f} to {vs_rf['high']:+.3f}.")
+    k3.metric("Churners in the top 20% riskiest", ch.pct(c["precision_top20"]),
               f"base rate {ch.pct(c['test_churn_rate'])}", delta_color="off", border=True)
-    k3.metric("Churners caught by contacting that 20%", ch.pct(c["recall_top20"]), border=True)
+    k4.metric("Churners caught in that 20%", ch.pct(c["recall_top20"]), border=True,
+              help="Share of all churners who are among the 20% the model scores riskiest.")
 
     left, right = st.columns(2, gap="large")
     with left:
         y = scores["churned"].to_numpy()
         roc_model = models.roc_curve(scores["churn_probability"], y)
         roc_base = models.roc_curve(scores["recency_days"], y)
+        roc_rf = models.roc_curve(scores["rf_probability"], y)
         fig = ch.multi_line(
             roc_model["fpr"], {f"Model (AUC {c['auc_model']:.2f})": roc_model["tpr"]},
             title="ROC curve on the test cutoff", xtitle="False positive rate", ytitle="True positive rate",
@@ -75,6 +87,9 @@ with churn_tab:
         fig.add_scatter(x=roc_base["fpr"], y=roc_base["tpr"], mode="lines",
                         name=f"Recency rule (AUC {c['auc_recency_baseline']:.2f})",
                         line=dict(color=ch.tok()["series"][1], width=2), hoverinfo="skip")
+        fig.add_scatter(x=roc_rf["fpr"], y=roc_rf["tpr"], mode="lines",
+                        name=f"Recency + frequency (AUC {c['auc_recency_frequency']:.2f})",
+                        line=dict(color=ch.tok()["series"][2], width=2, dash="dot"), hoverinfo="skip")
         fig.update_yaxes(range=[0, 1.02])
         ch.show(fig)
     with right:
@@ -133,10 +148,12 @@ with clv_tab:
     pu, rv = v["purchases"], v["revenue"]
     over = pu["predicted_total"] / pu["actual_total"] - 1
     st.markdown(
-        "**Verdict: good for ranking and for newer customers, not for forecasting totals.** "
+        "**Verdict: use it for purchase counts and newer customers; rank by last year's spend.** "
         "A BG/NBD model predicts how many times each customer will buy; a Gamma-Gamma model predicts how much they "
-        "spend each time. Together they rank customers about as well as \"last year's spend\", predict purchase "
-        "counts better, especially for customers with little history, but overshoot the total number of purchases by "
+        "spend each time. They predict purchase counts better than the baseline, especially for customers with "
+        f"little history, but rank revenue slightly worse than \"last year's spend\" ({rv['spearman_model']:.2f} vs "
+        f"{rv['spearman_baseline']:.2f}; the gap's 95% interval, {rv['spearman_gap']['low']:+.3f} to "
+        f"{rv['spearman_gap']['high']:+.3f}, excludes zero), and overshoot the total number of purchases by "
         f"{ch.pct(over, 0)}."
     )
     k1, k2, k3, k4 = st.columns(4)
@@ -192,7 +209,7 @@ with clv_tab:
             f"- Gamma-Gamma assumes spend per purchase doesn't depend on how often a customer buys; the correlation "
             f"between the two here is {v['gg_frequency_value_corr']:+.2f}."
         )
-    st.markdown("**Highest predicted value for the holdout year**")
+    st.markdown("**Highest predicted value for the year after the calibration cutoff**")
     top = clv.sort_values("predicted_revenue", ascending=False).head(50)
     st.dataframe(
         top[["customer_id", "p_alive", "predicted_purchases", "predicted_revenue", "actual_purchases",

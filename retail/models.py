@@ -66,6 +66,20 @@ def spearman(a: np.ndarray, b: np.ndarray) -> float:
     return float(pd.Series(a).rank().corr(pd.Series(b).rank()))
 
 
+def paired_gap(stat, model: np.ndarray, baseline: np.ndarray, target: np.ndarray, n_boot: int = 1000,
+               seed: int = 0) -> dict[str, float]:
+    """stat(model, target) - stat(baseline, target), with a 95% interval from resampling customers (the same
+    resample for both, so the interval is for the gap, not for each score)."""
+    model, baseline, target = (np.asarray(x, float) for x in (model, baseline, target))
+    rng = np.random.default_rng(seed)
+    gaps = []
+    for _ in range(n_boot):
+        i = rng.integers(0, len(target), len(target))
+        gaps.append(stat(model[i], target[i]) - stat(baseline[i], target[i]))
+    low, high = np.nanpercentile(gaps, [2.5, 97.5])
+    return {"gap": stat(model, target) - stat(baseline, target), "low": float(low), "high": float(high)}
+
+
 # ---------------------------------------------------------------- BG/NBD
 
 @dataclass(frozen=True)

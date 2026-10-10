@@ -86,30 +86,77 @@ def peak_season(df: pd.DataFrame, months: tuple[int, ...] = (9, 10, 11)) -> dict
     return {"years": years, "monthly": m[["month", "revenue"]].reset_index(drop=True)}
 
 
-def bulk_cancellations(df: pd.DataFrame, unit_threshold: int = 1000) -> dict[str, float]:
-    """How much cancelled value comes from very large lines, and how many large sales lines a
-    confirm-before-fulfilment rule would have to check."""
-    c = metrics.cancel_rows(df, ["quantity", "revenue"])
+def _usual_quantity(sales: pd.DataFrame, lines: pd.Index) -> pd.Series:
+    """For each of `lines` (an index into `sales`), the median quantity of the same product's other sales
+    lines; NaN for a product sold only on that line."""
+    codes = sales["stock_code"].astype(str)
+    wanted = codes.isin(set(codes.loc[lines]))
+    by_code = dict(tuple(sales.loc[wanted, "quantity"].groupby(codes[wanted])))
+    out = {}
+    for i in lines:
+        others = by_code[codes.at[i]].drop(i)
+        out[i] = float(others.median()) if len(others) else np.nan
+    return pd.Series(out, dtype=float)
+
+
+def bulk_cancellations(df: pd.DataFrame, unit_threshold: int = 1000, usual_multiple: float = 50,
+                       keying_minutes: int = 60) -> dict[str, float]:
+    """How much cancelled value comes from very large lines, how much of that is keying errors (a line
+    cancelled within `keying_minutes` of being ordered with the same product, customer and quantity), and
+    how many sales lines a check at order entry would flag: at least `unit_threshold` units and
+    `usual_multiple` times the product's usual line, or a product with no other sales."""
+    c = metrics.cancel_rows(df, ["invoice_date", "stock_code", "customer_id", "quantity", "revenue"])
     units, value = -c["quantity"].to_numpy(), -c["revenue"].to_numpy()
     big = units >= unit_threshold
-    sales_big = int((metrics.sales_rows(df, ["quantity"])["quantity"].to_numpy() >= unit_threshold).sum())
-    months = data_years(df) * 12
+    sales = metrics.sales_rows(df, ["invoice_date", "stock_code", "customer_id", "quantity"]).reset_index(drop=True)
+    key = ["stock_code", "customer_id", "quantity"]
+    cb = c[big].assign(quantity=units[big], value=value[big]).reset_index(drop=True).fillna({"customer_id": -1})
+    orders = sales.fillna({"customer_id": -1}).rename(columns={"invoice_date": "ordered"}).rename_axis("sale")
+    matched = cb.rename_axis("cancel").reset_index().merge(orders.reset_index(), on=key, how="inner")
+    gap = matched["invoice_date"] - matched["ordered"]
+    quick = matched[(gap >= pd.Timedelta(0)) & (gap <= pd.Timedelta(minutes=keying_minutes))]
+    keyed = cb.index.isin(quick["cancel"])
+    big_sales = sales.index[sales["quantity"] >= unit_threshold]
+    usual = _usual_quantity(sales, big_sales)
+    flagged = usual.isna() | (sales.loc[big_sales, "quantity"].to_numpy() >= usual_multiple * usual)
+    # A mistyped line counts as caught if the check flags the order line it was cancelled against.
+    caught = quick[quick["sale"].map(flagged).fillna(False).astype(bool)]["cancel"].nunique()
+    years, months = data_years(df), data_years(df) * 12
+    total = value.sum()
+    genuine_value = float(cb.loc[~keyed, "value"].sum())
     return {
         "threshold": unit_threshold,
         "cancelled_lines": int(big.sum()),
         "cancelled_value": float(value[big].sum()),
-        "share_of_cancelled": float(value[big].sum() / value.sum()) if value.sum() else 0.0,
-        "cancelled_value_per_year": float(value[big].sum() / data_years(df)),
-        "sales_lines_to_confirm": sales_big,
-        "sales_lines_per_month": sales_big / months if months else 0.0,
+        "share_of_cancelled": float(value[big].sum() / total) if total else 0.0,
+        "cancelled_value_per_year": float(value[big].sum() / years),
+        "keying_errors": int(keyed.sum()),
+        "keying_error_units": [int(u) for u in cb.loc[keyed, "quantity"].sort_values(ascending=False)],
+        "keying_error_share": float(cb.loc[keyed, "value"].sum() / total) if total else 0.0,
+        "keying_errors_caught": int(caught),
+        "genuine_lines": int((~keyed).sum()),
+        "genuine_share": genuine_value / total if total else 0.0,
+        "genuine_value_per_year": genuine_value / years,
+        "sales_lines_to_confirm": int(flagged.sum()),
+        "sales_lines_per_month": float(flagged.sum() / months) if months else 0.0,
     }
 
 
 def guests(df: pd.DataFrame) -> dict[str, float]:
-    """Sales from checkouts without a customer ID: they can't be segmented, retained or contacted."""
-    s = metrics.sales_rows(df, ["customer_id", "revenue", "invoice"])
+    """Sales from orders without a customer ID: they can't be segmented, retained or contacted. Most come
+    through the retailer's own web shop (orders carrying its DOTCOM POSTAGE line, code DOT), which sells to
+    consumers: one unit per line at about twice the price the wholesale accounts pay."""
+    s = metrics.sales_rows(df, ["customer_id", "revenue", "invoice", "stock_code", "quantity", "price",
+                                "invoice_date"])
     g = s["customer_id"].isna().to_numpy()
     gross = s["revenue"].to_numpy()
+    web = set(df.loc[df["stock_code"].astype(str) == "DOT", "invoice"].astype(str))
+    on_web = s["invoice"].astype(str).isin(web).to_numpy()
+    web_invoices = df[df["invoice"].astype(str).isin(web)].groupby("invoice")["customer_id"].apply(
+        lambda ids: ids.isna().all())
+    month = s["invoice_date"].dt.to_period("M")
+    prices = s.groupby([s["stock_code"].astype(str), month, pd.Series(g, index=s.index, name="guest")])[
+        "price"].median().unstack().dropna()
     return {
         "line_share": float(g.mean()) if len(g) else 0.0,
         "gross": float(gross[g].sum()),
@@ -117,6 +164,11 @@ def guests(df: pd.DataFrame) -> dict[str, float]:
         "gross_per_year": float(gross[g].sum() / data_years(df)),
         "orders": int(s.loc[g, "invoice"].nunique()),
         "orders_share": float(s.loc[g, "invoice"].nunique() / s["invoice"].nunique()) if len(s) else 0.0,
+        "web_shop_share_of_guest_gross": float(gross[g & on_web].sum() / gross[g].sum()) if g.any() else 0.0,
+        "web_shop_orders_without_id": float(web_invoices.mean()) if len(web_invoices) else 0.0,
+        "median_units_guest": float(np.median(s.loc[g, "quantity"])) if g.any() else 0.0,
+        "median_units_identified": float(np.median(s.loc[~g, "quantity"])) if (~g).any() else 0.0,
+        "price_ratio": float((prices[True] / prices[False]).median()) if len(prices) else float("nan"),
     }
 
 

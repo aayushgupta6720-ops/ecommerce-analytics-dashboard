@@ -31,28 +31,29 @@ value = {
     "winback": wb_prev * A["winback_rate"] / 100,
     "peak": latest["peak"] * A["peak_lost"] / 100,
     "guests": g["gross_per_year"] * A["guest_converted"] / 100,
-    "bulk": bulk["cancelled_value_per_year"] * A["handling_cost"] / 100,
+    "bulk": bulk["genuine_value_per_year"] * A["handling_cost"] / 100,
 }
 summary = pd.DataFrame([
-    ("1", "Keep Champions buying", f"{b['champion_share']['customer_share']:.0%} of customers bring in "
-     f"{b['champion_share']['revenue_share']:.0%} of revenue", f"{ch.money(value['champions'])} protected / year",
+    ("1", "Keep Champions buying", f"{b['champion_share']['customer_share']:.0%} of identified customers bring in "
+     f"{b['champion_share']['revenue_share']:.0%} of their revenue", f"{ch.money(value['champions'])} protected / year",
      "Medium", "Champions' repeat rate and spend"),
     ("2", "Win back lapsed high-value customers", f"{len(wb):,} customers spent {ch.money(wb_prev)} in their last "
      "active year", f"{ch.money(value['winback'])} recovered / year", "Low–medium", "Reactivation vs a hold-out group"),
     ("3", "Plan stock and staff for Sep–Nov", f"{latest['peak_share']:.0%} of annual revenue; "
      f"{latest['top_month_multiple']:.1f}× in November", f"{ch.money(value['peak'])} protected / season",
      "Medium–high", "Forecast error, Sep–Nov stock-outs"),
-    ("4", "Turn guest checkouts into accounts", f"{g['gross_share']:.0%} of gross sales can't be contacted",
-     f"{ch.money(value['guests'])} made reachable / year", "Low", "Share of revenue with a customer ID"),
-    ("5", "Confirm bulk orders before picking", f"{bulk['share_of_cancelled']:.0%} of cancelled value from "
-     f"{bulk['cancelled_lines']} lines", f"{ch.money(value['bulk'])} handling saved / year", "Low",
-     "Cancelled value on large lines"),
+    ("4", "Link web-shop orders to customer records", f"{g['gross_share']:.0%} of gross sales have no customer ID, "
+     f"{g['web_shop_share_of_guest_gross']:.0%} of it from the web shop", f"{ch.money(value['guests'])} made "
+     "analysable / year", "Low–medium", "Share of revenue with a customer ID, by channel"),
+    ("5", "Check unusual quantities at order entry", f"{bulk['keying_errors']} mistyped lines are "
+     f"{bulk['keying_error_share']:.0%} of cancelled value", f"{ch.money(value['bulk'])} handling saved / year",
+     "Low", "Lines cancelled within an hour of entry"),
 ], columns=["#", "Recommendation", "Evidence", "Value at stake", "Effort", "Measure it by"])
 # A Markdown table wraps long cells; a data grid would truncate six text columns.
 header = "| " + " | ".join(summary.columns) + " |\n|" + "|".join(["---"] * len(summary.columns)) + "|\n"
 st.markdown(header + "\n".join("| " + " | ".join(map(str, row)) + " |" for row in summary.itertuples(index=False)))
 st.caption("Values use the assumptions set below; change a slider and this table updates. They're different kinds "
-           "of value (protected, recovered, reachable, cost avoided), so they aren't added together.")
+           "of value (protected, recovered, made analysable, cost avoided), so they aren't added together.")
 
 # ---------------------------------------------------------------- 1. Champions
 with st.container(border=True):
@@ -62,8 +63,9 @@ with st.container(border=True):
         share = b["champion_share"]
         st.markdown(
             f"- **Evidence:** {share['customers']:,} Champions ({share['customer_share']:.0%} of identified "
-            f"customers) bring in **{share['revenue_share']:.0%} of net revenue**: {ch.money(champ_revenue)} in the "
-            "last 365 days.\n"
+            f"customers) bring in **{share['revenue_share']:.0%} of identified customers' net revenue**: "
+            f"{ch.money(champ_revenue)} in the last 365 days. Web-shop orders without a customer ID (4) aren't in "
+            "that total.\n"
             f"- **Right now:** none of them is in the riskiest 20% on the churn model "
             f"(highest risk percentile: {champ['risk_percentile'].max():.0%}). This is about keeping a healthy group "
             "healthy, not a rescue.\n"
@@ -144,45 +146,59 @@ with st.container(border=True):
                      highlight=monthly["month"].dt.month.isin([9, 10, 11]), yprefix="£", height=260,
                      hover=[f"{m:%b %Y}: {ch.money(v)}" for m, v in zip(monthly["month"], monthly["revenue"])]))
 
-# ---------------------------------------------------------------- 4. Guests
+# ---------------------------------------------------------------- 4. Web shop
 with st.container(border=True):
-    st.subheader("4 · Turn guest checkouts into accounts")
+    st.subheader("4 · Link web-shop orders to customer records")
     left, right = st.columns([3, 2], gap="large")
     with left:
         st.markdown(
             f"- **Evidence:** {g['line_share']:.0%} of sales lines and **{g['gross_share']:.0%} of gross sales** "
-            f"({ch.money(g['gross_per_year'])} a year) come from {g['orders']:,} orders with no customer ID. Those "
-            "buyers can't be segmented, protected (1) or won back (2).\n"
-            "- **Action:** offer order tracking or a small next-order discount for creating an account at checkout, "
-            "and capture an email on every guest order.\n"
-            "- **Measure:** share of revenue with a customer ID, monthly."
+            f"({ch.money(g['gross_per_year'])} a year) come from {g['orders']:,} orders with no customer ID. They "
+            "look like the retailer's own web shop, not wholesale buyers skipping a login: "
+            f"{g['web_shop_orders_without_id']:.0%} of orders carrying the web shop's DOTCOM POSTAGE line have no "
+            f"customer ID, and those orders hold **{g['web_shop_share_of_guest_gross']:.0%}** of this revenue. Their "
+            f"lines are {g['median_units_guest']:.0f} unit against {g['median_units_identified']:.0f} for the "
+            f"accounts, at about **{g['price_ratio']:.1f}× the price** for the same product in the same month: "
+            "consumer orders. So the segments, churn model and win-back list (1, 2) cover the wholesale accounts "
+            "only.\n"
+            "- **Action:** pass the web shop's customer email or account ID into the order system, so its buyers can "
+            "be analysed and looked after as a channel of their own.\n"
+            "- **Measure:** share of revenue with a customer ID, by channel."
         )
     with right:
-        st.slider("Guest orders converted to accounts (%)", 5, 80, key="guest_converted",
+        st.slider("Web-shop revenue linked to a customer (%)", 5, 100, key="guest_converted",
                   value=DEFAULTS["guest_converted"])
-        st.metric("Revenue made reachable per year", ch.money(value["guests"]), border=True,
-                  help="Not new revenue: revenue from customers you could then retain and market to.")
+        st.metric("Revenue made analysable per year", ch.money(value["guests"]), border=True,
+                  help="Not new revenue: consumer revenue that segmentation and retention work could then cover.")
 
-# ---------------------------------------------------------------- 5. Bulk orders
+# ---------------------------------------------------------------- 5. Order entry
 with st.container(border=True):
-    st.subheader("5 · Confirm bulk orders before picking")
+    st.subheader("5 · Check unusual quantities at order entry")
     left, right = st.columns([3, 2], gap="large")
     with left:
+        units = ", ".join(f"{u:,}" for u in bulk["keying_error_units"][:2])
         st.markdown(
-            f"- **Evidence:** cancelled lines of {bulk['threshold']:,}+ units are only **{bulk['cancelled_lines']} "
-            f"lines**, but **{bulk['share_of_cancelled']:.0%} of all cancelled value** "
-            f"({ch.money(bulk['cancelled_value_per_year'])} a year of goods picked, then cancelled). The two biggest "
-            "were single orders cancelled in full.\n"
-            f"- **Action:** hold any order line of {bulk['threshold']:,}+ units for a quick confirmation call before "
-            f"picking. That's about **{bulk['sales_lines_per_month']:.0f} lines a month** to check.\n"
-            "- **Measure:** cancelled value on large lines, and time from order to dispatch for them."
+            f"- **Evidence:** the biggest cancellations are typing mistakes. Lines of {units} units were cancelled "
+            f"within the hour they were entered, and the {bulk['keying_errors']} lines of {bulk['threshold']:,}+ units "
+            "cancelled that fast (same product, customer and quantity) are "
+            f"**{bulk['keying_error_share']:.0%} of all cancelled value**. The other {bulk['genuine_lines']} large "
+            f"cancellations are {bulk['genuine_share']:.0%} ({ch.money(bulk['genuine_value_per_year'])} of goods a "
+            "year).\n"
+            f"- **Action:** ask for confirmation at order entry when a line is at least {bulk['threshold']:,} units "
+            "and 50 times the product's usual line, or the product has never sold before. That flags about "
+            f"**{bulk['sales_lines_per_month']:.0f} lines a month**, and would have flagged "
+            f"{bulk['keying_errors_caught']} of the {bulk['keying_errors']} mistyped ones.\n"
+            "- **Measure:** lines cancelled within an hour of entry, and cancelled value on large lines."
         )
     with right:
-        st.select_slider("Hold lines of at least (units)", [250, 500, 1000, 2500, 5000], key="bulk_threshold",
+        st.select_slider("Check lines of at least (units)", [250, 500, 1000, 2500, 5000], key="bulk_threshold",
                          value=DEFAULTS["bulk_threshold"])
         st.slider("Handling cost as a share of goods value (%)", 2, 30, key="handling_cost",
                   value=DEFAULTS["handling_cost"])
-        st.metric("Handling cost avoided per year", ch.money(value["bulk"]), border=True)
+        st.metric("Handling cost avoided per year", ch.money(value["bulk"]), border=True,
+                  help="Handling on the genuine large cancellations, if confirming at entry stopped them before "
+                       "picking. Small on its own: the check is mainly insurance against a mistyped order being "
+                       "picked.")
 
 # ---------------------------------------------------------------- not a priority
 with st.expander("Considered, not prioritised: \"complete the set\" prompts"):

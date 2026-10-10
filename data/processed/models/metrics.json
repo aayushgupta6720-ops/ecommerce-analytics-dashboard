@@ -30,7 +30,12 @@
       "spearman_model": 0.5876331023410102,
       "spearman_baseline": 0.6183300262826198,
       "top10_share_model": 0.6088583896608193,
-      "top10_share_baseline": 0.6135052724442948
+      "top10_share_baseline": 0.6135052724442948,
+      "spearman_gap": {
+        "gap": -0.03069692394160961,
+        "low": -0.04588711218663184,
+        "high": -0.015914445995977064
+      }
     },
     "return_auc_model": 0.7548909815186295,
     "return_auc_baseline": 0.7521990577100123,
@@ -100,6 +105,17 @@
     "test_churn_rate": 0.4920966992096699,
     "auc_model": 0.7585653460220142,
     "auc_recency_baseline": 0.707362216512508,
+    "auc_recency_frequency": 0.7575556489959778,
+    "auc_gap_vs_recency": {
+      "gap": 0.05120312950950623,
+      "low": 0.03791993940937581,
+      "high": 0.06315370522859065
+    },
+    "auc_gap_vs_recency_frequency": {
+      "gap": 0.0010096970260363713,
+      "low": -0.005925917457525153,
+      "high": 0.00803904812539694
+    },
     "precision_top20": 0.7651162790697674,
     "recall_top20": 0.3108171941426547,
     "coefficients": {

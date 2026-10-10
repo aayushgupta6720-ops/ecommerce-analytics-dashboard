@@ -33,6 +33,7 @@ CHURN_TRAIN_CUTOFF = pd.Timestamp("2010-09-11")
 CHURN_TEST_CUTOFF = pd.Timestamp("2011-09-11")  # +90 days reaches the last day of data
 SEASONAL_CUTOFFS = ["2010-09-11", "2010-12-11", "2011-03-11", "2011-06-11", "2011-09-11"]
 CHURN_HORIZON = 90
+RF_FEATURES = ("recency_days", "frequency_365")
 
 
 def _by_history(d: pd.DataFrame, mask: pd.Series) -> dict:
@@ -91,6 +92,8 @@ def clv(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
             "spearman_baseline": models.spearman(d["baseline_revenue"], d["actual_revenue"]),
             "top10_share_model": models.top_share(d["predicted_revenue"], d["actual_revenue"]),
             "top10_share_baseline": models.top_share(d["baseline_revenue"], d["actual_revenue"]),
+            "spearman_gap": models.paired_gap(models.spearman, d["predicted_revenue"], d["baseline_revenue"],
+                                              d["actual_revenue"]),
         },
         # "Will they buy again in the holdout year?" scored by expected purchases. P(alive) is reported but is
         # a poor ranking score here: BG/NBD gives every one-time buyer P(alive) = 1.
@@ -113,6 +116,9 @@ def churn(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     test = models.churn_dataset(df, CHURN_TEST_CUTOFF, CHURN_HORIZON)
     model = models.LogisticModel.fit(train[models.CHURN_FEATURES], train["churned"])
     test["churn_probability"] = model.predict_proba(test[models.CHURN_FEATURES])
+    # The fair comparison: the same logistic regression on the two features that carry most of the signal.
+    rf = models.LogisticModel.fit(train[list(RF_FEATURES)], train["churned"])
+    test["rf_probability"] = rf.predict_proba(test[list(RF_FEATURES)])
     y = test["churned"].to_numpy()
     top = test["churn_probability"].rank(method="first", ascending=False) <= round(0.2 * len(test))
     deciles = pd.qcut(test["churn_probability"].rank(method="first"), 10, labels=list(range(1, 11)))
@@ -125,6 +131,10 @@ def churn(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         "train_churn_rate": float(train["churned"].mean()), "test_churn_rate": float(y.mean()),
         "auc_model": models.auc(test["churn_probability"], y),
         "auc_recency_baseline": models.auc(test["recency_days"], y),
+        "auc_recency_frequency": models.auc(test["rf_probability"], y),
+        "auc_gap_vs_recency": models.paired_gap(models.auc, test["churn_probability"], test["recency_days"], y),
+        "auc_gap_vs_recency_frequency": models.paired_gap(models.auc, test["churn_probability"],
+                                                          test["rf_probability"], y),
         "precision_top20": float(y[top.to_numpy()].mean()),
         "recall_top20": float(y[top.to_numpy()].sum() / y.sum()),
         "coefficients": dict(zip(("intercept", *models.CHURN_FEATURES), map(float, model.coef), strict=True)),
@@ -143,7 +153,7 @@ def churn(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     current["risk_percentile"] = current["churn_probability"].rank(pct=True)
     metrics["current_cutoff"] = str(now.date())
     metrics["current_customers"] = int(len(current))
-    return (test[["customer_id", *models.CHURN_FEATURES, "churn_probability", "churned"]],
+    return (test[["customer_id", *models.CHURN_FEATURES, "churn_probability", "rf_probability", "churned"]],
             current[["customer_id", *models.CHURN_FEATURES, "churn_probability", "risk_percentile"]]), metrics
 
 

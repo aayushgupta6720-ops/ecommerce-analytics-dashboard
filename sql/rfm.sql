@@ -2,8 +2,8 @@
 --   Recency:   days from the last purchase to $snapshot (the day after the window ends)
 --   Frequency: distinct sales invoices
 --   Monetary:  net revenue (sales minus the customer's cancellations in the window)
--- Scores are 1-5 by rank: row_number / count, times 5, rounded up. Ties break by customer_id,
--- which matches pandas rank(method="first") on a frame sorted by customer_id.
+-- Scores are 1-5 by rank: rank / count, times 5, rounded up. Tied values share the lowest rank of
+-- their group, as pandas rank(method="min") does, so equal customers always get equal scores.
 WITH sales AS (
     SELECT * FROM f
     WHERE is_product AND NOT is_cancellation AND customer_id IS NOT NULL
@@ -38,11 +38,11 @@ base AS (
 ),
 scored AS (
     SELECT *,
-        least(5, greatest(1, ceil(row_number() OVER (ORDER BY recency DESC, customer_id)::DOUBLE
+        least(5, greatest(1, ceil(rank() OVER (ORDER BY recency DESC)::DOUBLE
                                   / count(*) OVER () * 5)))::INTEGER            AS r_score,
-        least(5, greatest(1, ceil(row_number() OVER (ORDER BY frequency, customer_id)::DOUBLE
+        least(5, greatest(1, ceil(rank() OVER (ORDER BY frequency)::DOUBLE
                                   / count(*) OVER () * 5)))::INTEGER            AS f_score,
-        least(5, greatest(1, ceil(row_number() OVER (ORDER BY monetary, customer_id)::DOUBLE
+        least(5, greatest(1, ceil(rank() OVER (ORDER BY monetary)::DOUBLE
                                   / count(*) OVER () * 5)))::INTEGER            AS m_score
     FROM base
 )

@@ -233,7 +233,7 @@ Streamlit app's own code and refreshed on every export. **Revenue** is net of ca
 | Germany, Q1 2011 | £35,726.69 | 81 | 41 | £441.07 | 3.40% |
 
 - **Top product by revenue:** REGENCY CAKESTAND 3 TIER (22423), £314,045.02
-- **Champions:** 826 customers, 52.27% of segmented revenue
+- **Champions:** 796 customers, 52.01% of segmented revenue
 - **Jan 2010 cohort retention, month 1:** 21.47%
 - **Basket rules at 1% support:** 1,066 rules; strongest lift 45.95 (POPPY'S PLAYHOUSE LIVINGROOM → POPPY'S PLAYHOUSE BEDROOM)
 <!-- TIEOUT:END -->

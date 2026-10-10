@@ -321,8 +321,10 @@ SEGMENT_LOOKUP = {(r, f): _segment(r, f) for r in range(1, 6) for f in range(1, 
 
 
 def _quintile(values: pd.Series, ascending: bool = True) -> pd.Series:
-    """1-5 scores by rank, so ties and small groups never produce duplicate bin edges."""
-    pct = values.rank(method="first", pct=True, ascending=ascending)
+    """1-5 scores by rank, so small groups never produce duplicate bin edges. Tied values share the score
+    where their group starts (rank method "min"): with "first", ties were broken by customer ID, and two
+    customers with the same recency and frequency could land in different segments."""
+    pct = values.rank(method="min", pct=True, ascending=ascending)
     return np.ceil(pct * 5).clip(1, 5).astype(int)
 
 
