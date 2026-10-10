@@ -9,7 +9,8 @@ st.header("Insights & actions")
 st.caption(
     "Five recommendations drawn from all two years of data (the sidebar filters don't apply here). Each one shows "
     "the evidence, the action, the value at stake under an assumption you can change, and how to measure it. "
-    "Values are sized opportunities, not forecasts. Effort is an estimate."
+    "Values are sized opportunities, not forecasts, and they're revenue, not profit: the data has no costs or "
+    "margins. Effort is an estimate."
 )
 
 # Assumptions live in session state so the summary table reflects the sliders further down.
@@ -20,7 +21,8 @@ A = {k: st.session_state.get(k, v) for k, v in DEFAULTS.items()}
 champ = b["champions"]
 champ_revenue = champ["last_year_revenue"].sum()
 wb = b["winback"]
-wb_prev = wb["prev_year_revenue"].sum()
+wb_prev = wb["last_active_year_revenue"].sum()
+base = b["winback_baseline"]
 latest = b["peak"]["years"][-1]
 g = b["guests"]
 bulk = data.bulk_cancellations(A["bulk_threshold"])
@@ -28,7 +30,8 @@ bundles = b["bundles"]
 
 value = {
     "champions": champ_revenue * A["champ_retained"] / 100,
-    "winback": wb_prev * A["winback_rate"] / 100,
+    # Extra customers won back, spending what lapsed customers who came back on their own spent.
+    "winback": wb_prev * A["winback_rate"] / 100 * base["spend_ratio"],
     "peak": latest["peak"] * A["peak_lost"] / 100,
     "guests": g["gross_per_year"] * A["guest_converted"] / 100,
     "bulk": bulk["genuine_value_per_year"] * A["handling_cost"] / 100,
@@ -38,7 +41,8 @@ summary = pd.DataFrame([
      f"{b['champion_share']['revenue_share']:.0%} of their revenue", f"{ch.money(value['champions'])} protected / year",
      "Medium", "Champions' repeat rate and spend"),
     ("2", "Win back lapsed high-value customers", f"{len(wb):,} customers spent {ch.money(wb_prev)} in their last "
-     "active year", f"{ch.money(value['winback'])} recovered / year", "Low–medium", "Reactivation vs a hold-out group"),
+     f"active year; {base['returned_share']:.0%} of such customers come back anyway",
+     f"{ch.money(value['winback'])} extra / year", "Low–medium", "Reactivation vs a hold-out group"),
     ("3", "Plan stock and staff for Sep–Nov", f"{latest['peak_share']:.0%} of annual revenue; "
      f"{latest['top_month_multiple']:.1f}× in November", f"{ch.money(value['peak'])} protected / season",
      "Medium–high", "Forecast error, Sep–Nov stock-outs"),
@@ -67,8 +71,9 @@ with st.container(border=True):
             f"{ch.money(champ_revenue)} in the last 365 days. Web-shop orders without a customer ID (4) aren't in "
             "that total.\n"
             f"- **Right now:** none of them is in the riskiest 20% on the churn model "
-            f"(highest risk percentile: {champ['risk_percentile'].max():.0%}). This is about keeping a healthy group "
-            "healthy, not a rescue.\n"
+            f"(highest risk percentile: {champ['risk_percentile'].max():.0%}). That's partly by construction: the "
+            "model leans on the same recency and frequency that make someone a Champion. So this is about keeping a "
+            "healthy group healthy, not a rescue, and the watch list matters for the few whose risk climbs.\n"
             "- **Action:** a VIP tier with early access to new ranges and a named contact; review the watch list "
             "monthly and call anyone whose churn risk climbs.\n"
             "- **Measure:** Champions' 90-day repeat rate and spend, against the same months last year."
@@ -99,23 +104,29 @@ with st.container(border=True):
         st.markdown(
             f"- **Evidence:** {len(wb):,} customers in the *At Risk* ({at_risk:,}) and *Can't Lose* "
             f"({cant_lose:,}) segments used to buy often, then went quiet "
-            f"for about a year (median {wb['recency'].median():.0f} days). In their last active year they spent "
-            f"**{ch.money(wb_prev)}**.\n"
+            f"for a while (median {wb['recency'].median():.0f} days). In their last active year (the 365 days up "
+            f"to their last order) they spent **{ch.money(wb_prev)}**.\n"
+            f"- **Without a campaign:** of the {base['customers']:,} customers in these segments on "
+            f"{pd.Timestamp(base['snapshot']):%d %b %Y}, **{base['returned_share']:.0%} ordered again within a year** "
+            f"on their own, spending {base['spend_ratio']:.0%} of what they had the year before (a snapshot with "
+            f"only {base['history_days']} days of history behind it). A campaign is worth only the returns it adds.\n"
             "- **Action:** a personal win-back email with an offer on their usual categories, highest previous "
             "spend first. Keep a random 10% as a hold-out group to measure the real effect.\n"
             "- **Measure:** share who order again within 90 days, versus the hold-out group."
         )
     with right:
-        st.slider("Customers won back (%)", 5, 30, key="winback_rate", value=DEFAULTS["winback_rate"])
-        st.metric("Revenue recovered per year", ch.money(value["winback"]), border=True,
-                  help="Won-back share × what these customers spent in their last active year.")
+        st.slider("Extra customers won back, beyond those who return anyway (%)", 5, 30, key="winback_rate",
+                  value=DEFAULTS["winback_rate"])
+        st.metric("Extra revenue per year", ch.money(value["winback"]), border=True,
+                  help="Extra won-back share × what these customers spent in their last active year × the share "
+                       "of it that customers who came back on their own went on to spend.")
     with st.expander("Contact list, highest previous spend first"):
         st.dataframe(wb.head(50), hide_index=True, width="stretch", height=300,
                      column_config={"customer_id": st.column_config.NumberColumn("Customer", format="%d"),
                                     "segment": "Segment", "country": "Country", "recency": "Days since order",
                                     "frequency": "Orders", "monetary": st.column_config.NumberColumn(
                                         "Lifetime spend", format="£%,.0f"),
-                                    "prev_year_revenue": st.column_config.NumberColumn(
+                                    "last_active_year_revenue": st.column_config.NumberColumn(
                                         "Spend in last active year", format="£%,.0f")})
         st.download_button("Download the win-back list (CSV)", wb.to_csv(index=False), "winback_list.csv", "text/csv",
                            icon=":material/download:")

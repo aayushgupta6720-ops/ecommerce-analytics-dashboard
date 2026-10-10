@@ -18,6 +18,7 @@ Definitions used throughout:
 from __future__ import annotations
 
 import math
+import re
 from datetime import date, timedelta
 
 import numpy as np
@@ -429,6 +430,29 @@ def cohort_table(df: pd.DataFrame, acquired: pd.Series) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------- market basket
+
+# Words that tell variants of one product apart (colour, size) or carry no meaning, dropped
+# before comparing descriptions. Pattern words (RETROSPOT, POLKADOT, VINTAGE) are kept: they
+# name a product range.
+_VARIANT_WORDS = frozenset(
+    "RED PINK BLUE GREEN WHITE BLACK IVORY CREAM YELLOW ORANGE PURPLE GOLD SILVER BROWN GREY GRAY LILAC "
+    "SMALL LARGE MINI JUMBO MEDIUM BIG SET OF AND THE A IN WITH DESIGN DESIGNS ASSORTED COLOUR COLOURS".split()
+)
+
+
+def _content_words(description: str) -> set[str]:
+    return {w for w in re.findall(r"[A-Z']+", str(description).upper()) if w not in _VARIANT_WORDS and len(w) > 1}
+
+
+def same_range(desc_a: str, desc_b: str) -> bool:
+    """Whether two products look like variants or matching pieces of one range: at least half
+    the shorter description's content words appear in the other. POPPY'S PLAYHOUSE KITCHEN and
+    ...BEDROOM, or PINK and BLUE POLKADOT CUP, are; RECYCLING BAG RETROSPOT and TOY TIDY PINK
+    POLKADOT aren't. A word-overlap rule, so some matching pieces (RETROSPOT PLATE and CUP)
+    still count as different products."""
+    a, b = _content_words(desc_a), _content_words(desc_b)
+    return bool(a and b) and len(a & b) / min(len(a), len(b)) >= 0.5
+
 
 def basket_rules(df: pd.DataFrame, min_support: float = 0.01, max_items: int = 1000) -> pd.DataFrame:
     """Pairwise association rules A -> B over sales invoices.

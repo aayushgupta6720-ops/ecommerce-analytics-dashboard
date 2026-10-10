@@ -2,6 +2,7 @@ import streamlit as st
 
 from retail import charts as ch
 from retail import data
+from retail.metrics import same_range
 
 f = data.page_header(
     "Market basket",
@@ -27,6 +28,19 @@ with st.spinner("Finding product pairs…"):
     rules = data.compute("basket_rules", f, min_support=min_support)
 n_orders = data.compute("kpis", f)["orders"]
 view = rules[(rules["confidence"] >= min_conf) & (rules["lift"] >= min_lift)] if len(rules) else rules
+if len(view):
+    view = view.assign(same_range=[same_range(a, b) for a, b in zip(view["antecedent_desc"], view["consequent_desc"])])
+    variants = int(view["same_range"].sum())
+    across = st.toggle(
+        "Only pairs from different product ranges", value=True, key="basket_across",
+        help="Colour and design variants of one item, or matching pieces of one range, are bought together "
+             "for obvious reasons. A word-overlap rule spots most of them; some matching pieces get through.",
+    )
+    st.caption(f"{variants:,} of the {len(view):,} rules at these thresholds pair items from the same range "
+               f"(including {view.nlargest(50, 'lift')['same_range'].sum()} of the 50 with the highest lift)"
+               + (", and are hidden." if across else "."))
+    if across:
+        view = view[~view["same_range"]]
 
 m1, m2, m3 = st.columns(3)
 m1.metric("Orders analysed", f"{n_orders:,}", border=True)
@@ -43,8 +57,9 @@ ch.show(ch.bar_h(ch.nice(pairs["antecedent_desc"], 34) + "  →  " + ch.nice(pai
                  hover=[f"{a} → {b}<br>lift {lift:.1f}× · confidence {c:.0%} · in {n:,} orders"
                         for a, b, lift, c, n in zip(pairs["antecedent_desc"], pairs["consequent_desc"],
                                                  pairs["lift"], pairs["confidence"], pairs["pair_baskets"])]))
-st.caption("Many of the strongest pairs are colour or design variants of the same item, like the Poppy's "
-           "Playhouse rooms or matching bowls. That points to bundles or \"complete the set\" prompts.")
+st.caption("With every pair shown, the strongest are colour or design variants of one item, like the Poppy's "
+           "Playhouse rooms or polka-dot cups: \"complete the set\" prompts, not cross-selling. The pairs across "
+           "ranges are the ones a recommendation could add.")
 
 left, right = st.columns([2, 3], gap="large")
 with left:

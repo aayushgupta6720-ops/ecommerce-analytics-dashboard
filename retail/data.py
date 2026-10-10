@@ -127,6 +127,7 @@ def insights_bundle() -> dict:
         "snapshot": snapshot,
         "years": insights.data_years(df),
         "winback": insights.winback(df, snapshot),
+        "winback_baseline": insights.winback_baseline(df, snapshot),
         "champions": insights.champions(df, snapshot, current),
         "champion_share": insights.segment_share(df, snapshot, "Champions"),
         "peak": insights.peak_season(df),

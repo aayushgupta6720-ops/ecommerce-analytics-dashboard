@@ -22,7 +22,7 @@ Eleven pages. The seven analysis pages respond to the sidebar filters (period, c
 | **Geography** | Choropleth, country table, highest average order values, revenue by region. |
 | **Customers (RFM)** | Recency/Frequency/Monetary scores and 10 segments. Customer share vs revenue share (Champions are 14% of identified customers and 52% of their revenue). Every-customer scatter. CSV export. |
 | **Cohort retention** | Monthly acquisition cohorts × months since first order: retention %, active customers or revenue. |
-| **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. |
+| **Market basket** | Pairwise association rules (support, confidence, lift) with adjustable thresholds and a *customers who bought X also bought* lookup. By default it hides pairs from the same product range: 49 of the 50 rules with the highest lift are colour or design variants or matching pieces of one range (Poppy's Playhouse rooms, polka-dot cups), which says "complete the set", not cross-sell. |
 | **Returns & cancellations** | Cancellation rate over time, largest single cancellations, most-cancelled products, and cancellations by country and by customer. |
 | **Insights & actions** | Five prioritised recommendations, each with evidence, an action, value at stake under adjustable assumptions, and a KPI; downloadable win-back and watch lists. |
 | **Ask the data** | Type a question in plain English ("top 5 products by units in November 2010") and get the answer as a number, chart or table, computed by the same metric code as every other page. |
@@ -103,12 +103,13 @@ code, unit-tested on hand-computed fixtures.
 ## Insights & actions
 
 The page turns the analysis into five recommendations. Values are sized with assumptions you can change on the
-page, using the defaults shown below. They're sized opportunities, not forecasts.
+page, using the defaults shown below. They're sized opportunities, not forecasts, and they're revenue rather than
+profit: the data has no costs or margins.
 
 | # | Recommendation | Evidence | Value at stake (default assumption) |
 |---|---|---|---|
 | 1 | Keep Champions buying (VIP tier, monthly watch list from the churn model) | 14% of identified customers bring in 52% of their revenue (£4.5M in the last year); none currently in the riskiest 20% | £224K a year protected if a VIP tier keeps 5% of their revenue |
-| 2 | Win back lapsed high-value customers, with a hold-out group | 713 At Risk / Can't Lose customers spent £1.13M in their last active year | £113K a year at a 10% win-back rate |
+| 2 | Win back lapsed high-value customers, with a hold-out group | 713 At Risk / Can't Lose customers spent £1.25M in their last active year; a year earlier, 66% of such customers came back within a year without a campaign, spending 75% of what they had | £94K a year if a campaign wins back 10% more than come back anyway |
 | 3 | Plan stock and staff for September–November | 36–38% of annual revenue in both years; November about 1.8× an average month | £70K a season if 2% of peak demand is lost today |
 | 4 | Link web-shop orders to customer records | 13% of gross sales (£1.3M a year) have no customer ID; 69% of that is the retailer's own web shop (DOTCOM POSTAGE orders, 1 unit per line at about 2× the wholesale price) | £382K a year made analysable if 30% is linked |
 | 5 | Check unusual quantities at order entry | 4 mistyped lines (80,995 and 74,215 units among them, cancelled within the hour) are 35% of cancelled value; a check on lines 50× a product's usual flags about 11 a month and catches all 4 | £1.8K a year of handling on the genuine large cancellations; mainly insurance |

@@ -64,9 +64,9 @@ def test_winback_and_champions_follow_rfm():
     w = insights.winback(df, snap)
     assert set(w["segment"]) <= set(insights.LAPSED_SEGMENTS)
     assert set(w["customer_id"]) == set(r.index[r["segment"].isin(insights.LAPSED_SEGMENTS)])
-    assert w["prev_year_revenue"].is_monotonic_decreasing
-    # customer 2 spent 6 x 10 x 20 = 1,200 in Dec 2009 - Dec 2010 (the year before last)
-    assert w.set_index("customer_id").loc[2, "prev_year_revenue"] == 1200
+    assert w["last_active_year_revenue"].is_monotonic_decreasing
+    # customer 2 spent 6 x 10 x 20 = 1,200 in the 365 days up to their last order (Jun 2010)
+    assert w.set_index("customer_id").loc[2, "last_active_year_revenue"] == 1200
     ch = insights.champions(df, snap)
     assert set(ch["customer_id"]) == set(r.index[r["segment"] == "Champions"])
 
@@ -84,3 +84,30 @@ def test_bundle_opportunities():
     assert row["orders_without_b"] == 1      # order 3 had A without B
     assert row["value_per_b_order"] == 1.0   # B: 3 orders, 3 revenue
     assert row["missed_value"] == 1.0
+
+
+def test_the_winback_baseline_is_who_came_back_without_a_campaign():
+    # Two lapsed customers a year before the snapshot; one orders again within that year.
+    rows, inv = [], 0
+    for c in (1, 2):
+        for d in ("2009-12-05", "2010-01-05", "2010-02-05", "2010-03-05"):
+            inv += 1
+            rows.append((str(inv), f"{d} 10:00", "10001", 10, 10.0, c, "France"))
+    for c in range(3, 11):  # recent buyers, so 1 and 2 rank as lapsed
+        for d in ("2010-11-01", "2010-11-20"):
+            inv += 1
+            rows.append((str(inv), f"{d} 10:00", "10002", 1, 5.0, c, "France"))
+    rows.append((str(inv + 1), "2011-05-01 10:00", "10001", 10, 10.0, 1, "France"))  # customer 1 comes back
+    base = insights.winback_baseline(make_frame(rows), pd.Timestamp("2011-12-01").date())
+    assert base["customers"] == 2 and base["returned_share"] == 0.5
+    assert base["spend_ratio"] == pytest.approx(100 / 400)  # 1 order of 100 against 4 the year before
+
+
+def test_same_range_spots_variants_and_matching_pieces():
+    from retail.metrics import same_range
+
+    assert same_range("POPPY'S PLAYHOUSE KITCHEN", "POPPY'S PLAYHOUSE BEDROOM")
+    assert same_range("PINK  POLKADOT CUP", "BLUE POLKADOT CUP")
+    assert same_range("RED STRIPE CERAMIC DRAWER KNOB", "BLUE SPOT CERAMIC DRAWER KNOB")
+    assert not same_range("RECYCLING BAG RETROSPOT", "TOY TIDY PINK POLKADOT")
+    assert not same_range("JUMBO BAG RED RETROSPOT", "LUNCH BOX I LOVE LONDON")

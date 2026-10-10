@@ -28,16 +28,54 @@ def _net_by_customer(df: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp) -
     return p.groupby("customer_id")["revenue"].sum()
 
 
+def _last_active_year(df: pd.DataFrame, last_purchase: pd.Series) -> pd.Series:
+    """Each customer's net revenue in the 365 days up to and including their last purchase."""
+    p = metrics.product_rows(df, ["customer_id", "invoice_date", "revenue"])
+    p = p[p["customer_id"].isin(last_purchase.index)]
+    last = p["customer_id"].map(last_purchase)
+    in_year = (p["invoice_date"] > last - pd.Timedelta(days=365)) & (
+        p["invoice_date"] < last.dt.normalize() + pd.Timedelta(days=1))
+    p = p[in_year]
+    return p.groupby("customer_id")["revenue"].sum()
+
+
 def winback(df: pd.DataFrame, snapshot: date) -> pd.DataFrame:
-    """Lapsed high-value customers (RFM At Risk / Can't Lose) and what they spent in the year before last,
-    i.e. the year they were active. Sorted by that spend: the order to contact them in."""
+    """Lapsed high-value customers (RFM At Risk / Can't Lose) and what they spent in their last active year:
+    the 365 days up to their own last purchase. (It used to be the year before last, which missed the
+    recent spend of the many who lapsed within the last year.) Sorted by that spend: the order to contact them in."""
     r = metrics.rfm(df, snapshot)
     lapsed = r[r["segment"].isin(LAPSED_SEGMENTS)].copy()
-    snap = pd.Timestamp(snapshot)
-    prev = _net_by_customer(df, snap - pd.Timedelta(days=730), snap - pd.Timedelta(days=365))
-    lapsed["prev_year_revenue"] = lapsed["customer_id"].map(prev).fillna(0.0)
-    cols = ["customer_id", "segment", "country", "recency", "frequency", "monetary", "prev_year_revenue"]
-    return lapsed[cols].sort_values(["prev_year_revenue", "customer_id"], ascending=[False, True], ignore_index=True)
+    spend = _last_active_year(df, lapsed.set_index("customer_id")["last_purchase"])
+    lapsed["last_active_year_revenue"] = lapsed["customer_id"].map(spend).fillna(0.0)
+    cols = ["customer_id", "segment", "country", "recency", "frequency", "monetary", "last_active_year_revenue"]
+    return lapsed[cols].sort_values(["last_active_year_revenue", "customer_id"], ascending=[False, True],
+                                    ignore_index=True)
+
+
+def winback_baseline(df: pd.DataFrame, snapshot: date) -> dict:
+    """What lapsed customers did with no campaign: those At Risk / Can't Lose a year before `snapshot`,
+    the share who ordered again within that year, and what they spent then against their last active
+    year. A win-back campaign is worth only the returns it adds to these."""
+    earlier = pd.Timestamp(snapshot) - pd.Timedelta(days=365)
+    before = df[df["invoice_date"] < earlier]
+    r = metrics.rfm(before, earlier.date())
+    lapsed = r[r["segment"].isin(LAPSED_SEGMENTS)].set_index("customer_id")["last_purchase"]
+    if lapsed.empty:
+        return {"snapshot": earlier.date(), "customers": 0, "returned_share": float("nan"), "spend_ratio": float("nan")}
+    prior = _last_active_year(before, lapsed)
+    p = metrics.product_rows(df, ["customer_id", "invoice_date", "revenue"])
+    after = p[(p["invoice_date"] >= earlier) & (p["invoice_date"] < pd.Timestamp(snapshot))
+              & p["customer_id"].isin(lapsed.index)]
+    returned = after["customer_id"].unique()
+    return {
+        "snapshot": earlier.date(),
+        "customers": int(len(lapsed)),
+        "returned_share": float(len(returned) / len(lapsed)),
+        # of those who came back: next-year spend against their last active year
+        "spend_ratio": (float(after["revenue"].sum() / prior.reindex(returned).fillna(0).sum())
+                        if len(returned) else 0.0),
+        "history_days": int((earlier - df["invoice_date"].min()).days),
+    }
 
 
 def champions(df: pd.DataFrame, snapshot: date, current_scores: pd.DataFrame | None = None) -> pd.DataFrame:
