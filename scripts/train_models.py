@@ -189,10 +189,11 @@ def _close(a, b, path="") -> list[str]:
             return [f"{path}: length differs"]
         return [m for i, (x, y) in enumerate(zip(a, b, strict=True)) for m in _close(x, y, f"{path}[{i}]")]
     if isinstance(a, float) or isinstance(b, float):
-        # The linear-algebra libraries on macOS and on CI's Linux runner move a fitted coefficient in its
-        # last digits, which moves an AUC by about 1e-6; a gap between two AUCs (~0.001) can't meet a
-        # relative tolerance at that size, so small values get an absolute one.
-        ok = math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-5)
+        # The linear-algebra libraries on macOS and on CI's Linux runner move fitted parameters in their
+        # last digits: an AUC by about 1e-6, BG/NBD's weakly identified b by about 1e-6 of its value. A gap
+        # between two AUCs (~0.001) can't meet a relative tolerance at that size, so small values get an
+        # absolute one; 1e-5 relative still catches any real change in a model or the data.
+        ok = math.isclose(float(a), float(b), rel_tol=1e-5, abs_tol=1e-5)
         return [] if ok else [f"{path}: {b} -> {a}"]
     return [] if a == b else [f"{path}: {b} -> {a}"]
 
