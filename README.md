@@ -137,6 +137,8 @@ the numbers.**
 4. **The page shows how it read the question**, as a sentence written by code from the request (not by the
    model), plus an *Adjust* panel to correct the reading without asking again.
 
+![Ask the data: a typed question, how it was read, and the answer](docs/screenshots/ask-the-data.png)
+
 **Evaluation.** [`scripts/eval_ask.py`](scripts/eval_ask.py) runs 28 golden questions: 23 answerable and 5 that
 should be declined. A question passes when the model's request matches the expected one field by field and the
 answer equals a reference figure computed independently by the existing functions (`kpis`, `monthly_revenue`,
