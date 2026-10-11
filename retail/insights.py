@@ -96,6 +96,23 @@ def champions(df: pd.DataFrame, snapshot: date, current_scores: pd.DataFrame | N
                                     na_position="last", ignore_index=True)
 
 
+def champion_retention(df: pd.DataFrame, snapshot: date) -> dict:
+    """How much of their spending a year's Champions keep the next year: Champions as of a year before
+    `snapshot`, their net revenue in the 365 days before that and the 365 after. The latest year the data can
+    follow them through (with two years of data, the only one). What they let slip is the revenue a retention
+    programme works on."""
+    snap = pd.Timestamp(snapshot)
+    then = snap - pd.Timedelta(days=365)
+    r = metrics.rfm(df[df["invoice_date"] < then], then.date())
+    ids = r.loc[r["segment"] == "Champions", "customer_id"].tolist()
+    before = _net_by_customer(df, then - pd.Timedelta(days=365), then).reindex(ids).fillna(0.0)
+    after = _net_by_customer(df, then, snap).reindex(ids).fillna(0.0)
+    stopped = after <= 0
+    return {"as_of": then.date(), "champions": len(ids), "before": float(before.sum()), "after": float(after.sum()),
+            "kept": float(after.sum() / before.sum()) if before.sum() > 0 else float("nan"),
+            "stopped": int(stopped.sum()), "stopped_revenue": float(before[stopped].sum())}
+
+
 def segment_share(df: pd.DataFrame, snapshot: date, segment: str = "Champions") -> dict[str, float]:
     s = metrics.segment_summary(metrics.rfm(df, snapshot)).set_index("segment")
     return {"customers": int(s.loc[segment, "customers"]), "customer_share": float(s.loc[segment, "customer_share"]),

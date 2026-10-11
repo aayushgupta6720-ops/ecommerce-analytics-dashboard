@@ -108,11 +108,17 @@ profit: the data has no costs or margins.
 
 | # | Recommendation | Evidence | Value at stake (default assumption) |
 |---|---|---|---|
-| 1 | Keep Champions buying (VIP tier, monthly watch list from the churn model) | 14% of identified customers bring in 52% of their revenue (£4.5M in the last year); none currently in the riskiest 20% | £224K a year protected if a VIP tier keeps 5% of their revenue |
+| 1 | Keep Champions buying (VIP tier, monthly watch list from the churn model) | 14% of identified customers bring in 52% of their revenue (£4.5M in the last year); none currently in the riskiest 20%; a year's Champions keep 90% of their spending the next year, so about £443K a year slips away | £111K a year protected if a VIP tier keeps a quarter of what slips |
 | 2 | Win back lapsed high-value customers, with a hold-out group | 713 At Risk / Can't Lose customers spent £1.25M in their last active year; a year earlier, 66% of such customers came back within a year without a campaign, spending 75% of what they had | £94K a year if a campaign wins back 10% more than come back anyway |
 | 3 | Plan stock and staff for September–November | 36–38% of annual revenue in both years; November about 1.8× an average month | £70K a season if 2% of peak demand is lost today |
 | 4 | Link web-shop orders to customer records | 13% of gross sales (£1.3M a year) have no customer ID; 69% of that is the retailer's own web shop (DOTCOM POSTAGE orders, 1 unit per line at about 2× the wholesale price) | £382K a year made analysable if 30% is linked |
 | 5 | Check unusual quantities at order entry | 4 mistyped lines (80,995 and 74,215 units among them, cancelled within the hour) are 35% of cancelled value; a check on lines 50× a product's usual flags about 11 a month and catches all 4 | £1.8K a year of handling on the genuine large cancellations; mainly insurance |
+
+Recommendation 1 used to assume a VIP tier keeps 5% of all Champion revenue (£224K), a figure with nothing
+under it. It's now sized from what Champions actually let slip: the 561 Champions of December 2010 kept 90% of
+their spending over the next year (41 stopped buying, 4% of their revenue; the rest spent less). That's the only
+year two years of data can follow them through. The share a programme would keep remains an assumption, since
+nothing in the data measures one, and the page says so next to the slider.
 
 Two of them were reframed after a review of the evidence. Orders without a customer ID had been read as wholesale
 buyers skipping a login, but they're mostly consumer orders from the web shop, so the segments, churn model and

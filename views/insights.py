@@ -14,12 +14,14 @@ st.caption(
 )
 
 # Assumptions live in session state so the summary table reflects the sliders further down.
-DEFAULTS = {"champ_retained": 5, "winback_rate": 10, "peak_lost": 2.0, "guest_converted": 30,
+DEFAULTS = {"champ_retained": 25, "winback_rate": 10, "peak_lost": 2.0, "guest_converted": 30,
             "bulk_threshold": 1000, "handling_cost": 10}
 A = {k: st.session_state.get(k, v) for k, v in DEFAULTS.items()}
 
 champ = b["champions"]
 champ_revenue = champ["last_year_revenue"].sum()
+kept = b["champion_retention"]
+champ_at_risk = champ_revenue * (1 - kept["kept"])  # what Champions let slip in a year, at today's revenue
 wb = b["winback"]
 wb_prev = wb["last_active_year_revenue"].sum()
 base = b["winback_baseline"]
@@ -29,7 +31,7 @@ bulk = data.bulk_cancellations(A["bulk_threshold"])
 bundles = b["bundles"]
 
 value = {
-    "champions": champ_revenue * A["champ_retained"] / 100,
+    "champions": champ_at_risk * A["champ_retained"] / 100,
     # Extra customers won back, spending what lapsed customers who came back on their own spent.
     "winback": wb_prev * A["winback_rate"] / 100 * base["spend_ratio"],
     "peak": latest["peak"] * A["peak_lost"] / 100,
@@ -74,14 +76,22 @@ with st.container(border=True):
             f"(highest risk percentile: {champ['risk_percentile'].max():.0%}). That's partly by construction: the "
             "model leans on the same recency and frequency that make someone a Champion. So this is about keeping a "
             "healthy group healthy, not a rescue, and the watch list matters for the few whose risk climbs.\n"
+            f"- **What's at risk:** the Champions of {kept['as_of']:%d %b %Y} kept **{kept['kept']:.0%} of their "
+            f"spending** over the next year, so {1 - kept['kept']:.0%} slipped away: {kept['stopped']} of "
+            f"{kept['champions']} stopped buying, which was {kept['stopped_revenue'] / kept['before']:.0%} of their "
+            f"revenue, and the rest spent less. At today's Champion revenue that's {ch.money(champ_at_risk)} a year. "
+            "That's the only year two years of data can follow them through.\n"
             "- **Action:** a VIP tier with early access to new ranges and a named contact; review the watch list "
             "monthly and call anyone whose churn risk climbs.\n"
             "- **Measure:** Champions' 90-day repeat rate and spend, against the same months last year."
         )
     with right:
-        st.slider("Champion revenue a VIP programme keeps (%)", 1, 20, key="champ_retained",
-                  value=DEFAULTS["champ_retained"])
-        st.metric("Revenue protected per year", ch.money(value["champions"]), border=True)
+        st.slider("Share of that slipping revenue a VIP programme keeps (%)", 5, 100, step=5, key="champ_retained",
+                  value=DEFAULTS["champ_retained"],
+                  help="Nothing in this data measures what a VIP programme saves, so this is the assumption. "
+                  "The measured part is the pool it works on.")
+        st.metric("Revenue protected per year", ch.money(value["champions"]), border=True,
+                  help=f"{A['champ_retained']}% of the {ch.money(champ_at_risk)} a year that Champions let slip.")
     with st.expander(f"Watch list: Champions by current churn risk (as of {pd.Timestamp(b['snapshot']):%d %b %Y})"):
         st.dataframe(champ.head(50), hide_index=True, width="stretch", height=300,
                      column_config={"customer_id": st.column_config.NumberColumn("Customer", format="%d"),

@@ -71,6 +71,35 @@ def test_winback_and_champions_follow_rfm():
     assert set(ch["customer_id"]) == set(r.index[r["segment"] == "Champions"])
 
 
+def test_champion_retention_follows_last_years_champions_through_the_next_year(monkeypatch):
+    # Customers 1-4 bought every month of the year before 10 Dec 2010, at 10 x customer id each time.
+    # Afterwards customer 1 stops, 2 halves, 3 carries on, and 4, not a Champion, doesn't count.
+    rows, inv = [], 0
+    for c in range(1, 5):
+        for month in pd.date_range("2010-01-01", periods=11, freq="MS"):
+            inv += 1
+            rows.append((str(inv), f"{month:%Y-%m}-15 10:00", "10001", 1, 10.0 * c, c, "France"))
+        for month in pd.date_range("2011-01-01", periods=11, freq="MS") if c != 1 else []:
+            inv += 1
+            price = 10.0 * c * (0.5 if c == 2 else 1)
+            rows.append((str(inv), f"{month:%Y-%m}-15 10:00", "10001", 1, price, c, "France"))
+    df = make_frame(rows)
+    then = pd.Timestamp("2010-12-10")
+
+    def segments(frame, snapshot):  # RFM needs far more customers to name Champions; that's tested elsewhere
+        assert frame["invoice_date"].max() < then and snapshot == then.date()  # it only sees the past
+        ids = sorted(frame["customer_id"].dropna().unique())
+        return pd.DataFrame({"customer_id": ids, "segment": ["Champions" if c <= 3 else "Loyal" for c in ids]})
+
+    monkeypatch.setattr(metrics, "rfm", segments)
+    k = insights.champion_retention(df, pd.Timestamp("2011-12-10").date())
+    before, after = 110.0 * (1 + 2 + 3), 110.0 * (0 + 1 + 3)
+    assert (k["as_of"], k["champions"], k["stopped"]) == (then.date(), 3, 1)
+    assert (k["before"], k["after"]) == (pytest.approx(before), pytest.approx(after))
+    assert k["kept"] == pytest.approx(after / before)
+    assert k["stopped_revenue"] == pytest.approx(110.0)
+
+
 def test_bundle_opportunities():
     # baskets: {A,B} {A,B} {A,C} {B} {C}; A=20001 B=20002 C=20003, every line worth 1
     baskets = {"1": ["20001", "20002"], "2": ["20001", "20002"], "3": ["20001", "20003"],
