@@ -50,6 +50,7 @@ class Case:
     request: dict                             # what the model should produce (unlisted fields take defaults)
     check: object = None                      # (df, ctx) -> Expect
     example: bool = False
+    split: str = "dev"                        # "held_out": written after the prompt, never used to tune it
 
 
 def req(**fields) -> dict:
@@ -152,6 +153,108 @@ def cancel_monthly(df, ctx):
     return Expect(rows=list(zip(c["month"], c["cancel_rate"])))
 
 
+# --- references for the held-out cases (written 2026-10-11, after the prompt and before seeing how the
+# model reads them; none is an example, so none is shown to the model)
+
+def per_country(metric, start, end, countries, limit, ascending=False):
+    def check(df, ctx):
+        values = [(c, m.kpis(sl(df, start, end, [c]))[metric]) for c in countries(ctx)]
+        values = [(c, v) for c, v in values if v]
+        values.sort(key=lambda cv: (cv[1] if ascending else -cv[1], cv[0]))
+        return Expect(rows=values[:limit])
+    return check
+
+
+def customer_kpi(metric, customer, start, end):
+    def check(df, ctx):
+        return Expect(value=m.kpis(sl(df, start, end)[lambda d: d["customer_id"] == customer])[metric])
+    return check
+
+
+def product_kpi(metric, code, start, end):
+    def check(df, ctx):
+        return Expect(value=m.product_summary(sl(df, start, end)).set_index("stock_code").loc[code, metric])
+    return check
+
+
+def top_products(metric, start, end, limit):
+    def check(df, ctx):
+        p = m.product_summary(sl(df, start, end)).sort_values([metric, "stock_code"], ascending=[False, True])
+        return Expect(rows=list(zip(p["stock_code"].head(limit), p[metric].head(limit))))
+    return check
+
+
+def yearly_revenue(df, ctx):
+    years = (2009, 2010, 2011)
+    return Expect(rows=[(pd.Timestamp(y, 1, 1), m.kpis(sl(df, f"{y}-01-01", f"{y}-12-31"))["revenue"]) for y in years])
+
+
+def daily_revenue(df, ctx):
+    days = [date(2011, 3, d) for d in range(1, 8)]
+    values = {d.isoformat(): m.kpis(sl(df, d.isoformat(), d.isoformat()))["revenue"] for d in days}
+    return Expect(contains={d: v for d, v in values.items() if v})
+
+
+def quietest_months(df, ctx):
+    mon = m.monthly_revenue(sl(df, "2011-01-01", "2011-12-09"), date(2011, 1, 1), END)
+    mon = mon.sort_values(["orders", "month"]).head(3)
+    return Expect(rows=list(zip(mon["month"], mon["orders"])))
+
+
+def at_risk(df, ctx):
+    seg = m.segment_summary(m.rfm(df, END + timedelta(days=1))).set_index("segment")
+    return Expect(contains={"At Risk": seg.loc["At Risk", "customers"]})
+
+
+HELD_OUT = [
+    Case("How much did we make in Spain during 2010?",
+         req(start="2010-01-01", end="2010-12-31", countries=["Spain"]),
+         kpi("revenue", "2010-01-01", "2010-12-31", ["Spain"])),
+    Case("number of distinct customers from Belgium in the first half of 2011",
+         req(metric="customers", start="2011-01-01", end="2011-06-30", countries=["Belgium"]),
+         kpi("customers", "2011-01-01", "2011-06-30", ["Belgium"])),
+    Case("What share of sales got cancelled in December 2010?",
+         req(metric="cancel_rate", start="2010-12-01", end="2010-12-31"),
+         kpi("cancel_rate", "2010-12-01", "2010-12-31")),
+    Case("value of cancelled orders in 2010",
+         req(metric="cancelled_value", start="2010-01-01", end="2010-12-31"),
+         kpi("cancelled_value", "2010-01-01", "2010-12-31")),
+    Case("Which 4 countries bought the most units in 2010, leaving out the UK?",
+         req(metric="units", start="2010-01-01", end="2010-12-31", countries=["International"], group_by="country",
+             sort="desc", limit=4),
+         per_country("units", "2010-01-01", "2010-12-31", non_uk, 4)),
+    Case("average basket value for Japan in 2011",
+         req(metric="aov", start="2011-01-01", end="2011-12-31", countries=["Japan"]),
+         kpi("aov", "2011-01-01", "2011-12-09", ["Japan"])),
+    Case("top 10 products by revenue in December 2010",
+         req(start="2010-12-01", end="2010-12-31", group_by="product", sort="desc", limit=10),
+         top_products("revenue", "2010-12-01", "2010-12-31", 10)),
+    Case("revenue each year", req(group_by="year"), yearly_revenue),
+    Case("How many orders did customer 12347 place in 2011?",
+         req(metric="orders", start="2011-01-01", end="2011-12-31", customer_id="12347"),
+         customer_kpi("orders", 12347, "2011-01-01", "2011-12-09")),
+    Case("Compare November 2011 revenue with the same month a year before",
+         req(start="2011-11-01", end="2011-11-30", compare="last_year"),
+         compare_check("revenue", "2011-11-01", "2011-11-30", "2010-11-01", "2010-11-30")),
+    Case("daily revenue for the first week of March 2011",
+         req(start="2011-03-01", end="2011-03-07", group_by="day"), daily_revenue),
+    Case("What were sales to the Channel Islands in 2011?",
+         req(start="2011-01-01", end="2011-12-31", countries=["Channel Islands"]),
+         kpi("revenue", "2011-01-01", "2011-12-09", ["Channel Islands"])),
+    Case("the 3 quietest months of 2011 by number of orders",
+         req(metric="orders", start="2011-01-01", end="2011-12-31", group_by="month", sort="asc", limit=3),
+         quietest_months),
+    Case("units sold of the white hanging heart t-light holder in 2010",
+         req(metric="units", start="2010-01-01", end="2010-12-31", product="white hanging heart t-light holder"),
+         product_kpi("units", "85123A", "2010-01-01", "2010-12-31")),
+    Case("How many customers are at risk?", req(metric="customers", group_by="segment"), at_risk),
+    Case("What will revenue be in 2012?", req(answerable=False)),
+    Case("What was our profit margin in 2011?", req(answerable=False)),
+]
+for case in HELD_OUT:
+    case.split = "held_out"
+
+
 CASES = [
     Case("What was the net revenue in 2011?", req(start="2011-01-01", end="2011-12-31"),
          kpi("revenue", "2011-01-01", "2011-12-09"), example=True),
@@ -212,7 +315,7 @@ CASES = [
     Case("What's the weather in London today?", req(answerable=False)),
     Case("What is the retention rate of the January 2011 cohort?", req(answerable=False)),
     Case("Write a poem about our sales team", req(answerable=False)),
-]
+] + HELD_OUT
 
 SPEC_FIELDS = ["metric", "start", "end", "countries", "stock_codes", "customer_id", "group_by", "sort", "compare"]
 
@@ -282,6 +385,7 @@ def main() -> int:
     ctx = ask.build_context(df)
     picked = {int(i) for i in args.only.split(",")} if args.only else None
     passed, examples, ran = 0, [], 0
+    by_split: dict[str, list[int]] = {}
     for n, case in enumerate(CASES, 1):
         if picked and n not in picked:
             continue
@@ -312,14 +416,17 @@ def main() -> int:
                         problems += answer_diff(ask.answer(got[0], df, first=ctx.first), case.check(df, ctx))
         ok = not problems
         passed += ok
-        print(f"{'PASS' if ok else 'FAIL'}  {n:2}. {case.question}")
+        by_split.setdefault(case.split, [0, 0])[0] += ok
+        by_split[case.split][1] += 1
+        print(f"{'PASS' if ok else 'FAIL'}  {n:2}. {'[held-out] ' if case.split == 'held_out' else ''}{case.question}")
         for p in problems:
             print(f"        {p}")
         if ok and case.example:
             examples.append({"question": case.question, "request": raw})
 
-    print(f"\n{passed}/{ran} passed ({'offline' if args.offline else model})")
-    if examples and not picked:
+    print(f"\n{passed}/{ran} passed ({'offline' if args.offline else model}); "
+          + ", ".join(f"{split} {ok}/{total}" for split, (ok, total) in by_split.items()))
+    if examples and not picked and not args.offline:  # the gallery shows the model's own requests
         ask.EXAMPLES_PATH.write_text(json.dumps(examples, indent=2) + "\n")
         print(f"Wrote {len(examples)} examples to {ask.EXAMPLES_PATH}")
     return 0 if passed == ran else 1

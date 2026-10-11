@@ -147,13 +147,19 @@ the numbers.**
 
 ![Ask the data: a typed question, how it was read, and the answer](docs/screenshots/ask-the-data.png)
 
-**Evaluation.** [`scripts/eval_ask.py`](scripts/eval_ask.py) runs 28 golden questions: 23 answerable and 5 that
-should be declined. A question passes when the model's request matches the expected one field by field and the
+**Evaluation.** [`scripts/eval_ask.py`](scripts/eval_ask.py) runs 45 golden questions: 28 in the dev set (23
+answerable, 5 to decline) and 17 held out. A question passes when the model's request matches the expected one field by field and the
 answer equals a reference figure computed independently by the existing functions (`kpis`, `monthly_revenue`,
 `product_summary`, `country_summary`, `rfm`, `cancellation_monthly`). **Live result: 28/28 with
-gemini-3.5-flash-lite** (10 Oct 2026). `--offline` substitutes the expected requests for the model, which checks
-the answer code alone against the references (also 28/28). The passing questions become the page's example
-gallery.
+gemini-3.5-flash-lite** (10 Oct 2026). Those 28 were written alongside the prompt, so they show it works on the
+questions it was shaped around, not that it generalizes. So 17 held-out questions were added on 11 Oct, written
+after the prompt and never used to change it: new phrasings ("leaving out the UK", "the quietest months", "the
+same month a year before"), measures and groupings the first set barely used (cancelled value, units by country,
+daily and yearly breakdowns, a named product, a customer's order count, the At Risk segment), and two more to
+decline (a 2012 forecast, a profit margin the data can't give). **Held-out: 17/17 in each of two live runs.**
+They were written by the same developer, so they're held out from tuning, not from the author's habits.
+`--offline` substitutes the expected requests for the model, which checks the answer code alone against the
+references (45/45). The passing dev questions become the page's example gallery; held-out ones never do.
 
 **Access.** Free-text questions are password-protected, because each one uses the free daily quota. They're
 also capped at 300 a day site-wide and 30 a day per visitor. Five wrong passwords lock a visitor out for an hour,
