@@ -9,21 +9,25 @@ No Streamlit imports, so everything here is unit-testable.
 from __future__ import annotations
 
 import difflib
+import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import string
 import threading
+import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from redis.exceptions import RedisError
 
 from retail import metrics
 from retail.countries import region
@@ -36,6 +40,8 @@ MAX_QUESTION_CHARS = 300
 MAX_LIMIT = 50
 MIN_ORDERS_TO_RANK = 10  # when ranking by a ratio, smaller groups are left out as too noisy
 MAX_PRODUCT_MATCHES = 1000
+
+log = logging.getLogger(__name__)
 
 # measure -> (label, number format)
 METRICS = {
@@ -593,24 +599,101 @@ def password_ok(given: str, expected: str) -> bool:
     return bool(expected) and hmac.compare_digest(given.encode(), expected.encode())
 
 
-class DailyCounter:
-    """Questions asked today across every session. Kept in memory, so it resets when the server restarts."""
+class Counters:
+    """Counters that expire, shared by every session. With a Redis client they live in Redis, so a restart,
+    a spin-down or a second instance doesn't reset them; without one, or for 30 s after a Redis error,
+    they're kept in this process's memory, which a restart clears."""
 
-    def __init__(self, cap: int):
-        self.cap = cap
-        self.day: date | None = None
-        self.count = 0
+    RETRY_REDIS_AFTER_S = 30
+
+    def __init__(self, client=None, clock: Callable[[], float] = time.time):
+        self.client = client
+        self._clock = clock
+        self._memory: dict[str, tuple[int, float]] = {}  # key -> (count, expires at)
         self._lock = threading.Lock()
+        self._redis_down_until = 0.0
 
-    def take(self, today: date | None = None) -> bool:
-        today = today or date.today()
+    def _use_redis(self) -> bool:
+        return self.client is not None and self._clock() >= self._redis_down_until
+
+    def _redis_failed(self, error: Exception) -> None:
+        self._redis_down_until = self._clock() + self.RETRY_REDIS_AFTER_S
+        log.warning("Redis unavailable, counting in memory for %ss: %s", self.RETRY_REDIS_AFTER_S, error)
+
+    def add(self, key: str, ttl_s: int) -> int:
+        """Count one more and return the new count. A counter expires ttl_s after its first add."""
+        if self._use_redis():
+            try:
+                pipe = self.client.pipeline()  # MULTI/EXEC, so the count and its expiry are set together
+                pipe.incr(key)
+                pipe.expire(key, ttl_s, nx=True)
+                return int(pipe.execute()[0])
+            except RedisError as error:
+                self._redis_failed(error)
+        now = self._clock()
         with self._lock:
-            if today != self.day:
-                self.day, self.count = today, 0
-            if self.count >= self.cap:
-                return False
-            self.count += 1
-            return True
+            count, expires = self._memory.get(key, (0, 0.0))
+            if expires <= now:
+                count, expires = 0, now + ttl_s
+            self._memory[key] = (count + 1, expires)
+            if len(self._memory) > 4096:  # one key per visitor; drop the expired ones
+                self._memory = {k: v for k, v in self._memory.items() if v[1] > now}
+            return count + 1
+
+    def get(self, key: str) -> int:
+        if self._use_redis():
+            try:
+                return int(self.client.get(key) or 0)
+            except RedisError as error:
+                self._redis_failed(error)
+        with self._lock:
+            count, expires = self._memory.get(key, (0, 0.0))
+            return count if expires > self._clock() else 0
+
+
+def visitor_id(headers: Mapping[str, str], address: object, ip_header: str = "") -> str:
+    """A hashed client address, so the limits follow a visitor across tabs and sessions. On Render, set
+    CLIENT_IP_HEADER=CF-Connecting-IP: Cloudflare sets that header and rejects requests that send their own,
+    so it can't be forged, unlike X-Forwarded-For. Without it, the connection's address is used."""
+    if not isinstance(address, str):  # None when Streamlit doesn't know it; a mock under AppTest
+        address = ""
+    raw = (headers.get(ip_header) if ip_header else None) or address or "unknown"
+    return hashlib.sha256(raw.strip().encode()).hexdigest()[:16]
+
+
+class Limits:
+    """Who may ask, and how often. Counts are keyed by day and by visitor, never by browser session, so a
+    new tab or a reload doesn't reset them. Each check returns a refusal message, or None."""
+
+    DAY_S = 2 * 24 * 3600  # a day's counters outlive the day, then expire
+    WRONG_PASSWORD_WINDOW_S = 3600
+
+    def __init__(self, counters: Counters, daily_cap: int, visitor_cap: int, max_wrong: int = 5,
+                 max_wrong_daily: int = 50, today: Callable[[], date] = date.today):
+        self.counters = counters
+        self.daily_cap, self.visitor_cap = daily_cap, visitor_cap
+        self.max_wrong, self.max_wrong_daily = max_wrong, max_wrong_daily
+        self._today = today
+
+    def locked_out(self, visitor: str) -> str | None:
+        if self.counters.get(f"ask:wrong:{self._today()}") >= self.max_wrong_daily:
+            return "Too many wrong passwords on this site today; the password form is closed until tomorrow."
+        if self.counters.get(f"ask:wrong:visitor:{visitor}") >= self.max_wrong:
+            return "Too many wrong passwords from your connection. Try again in an hour."
+        return None
+
+    def wrong_password(self, visitor: str) -> None:
+        self.counters.add(f"ask:wrong:visitor:{visitor}", self.WRONG_PASSWORD_WINDOW_S)
+        self.counters.add(f"ask:wrong:{self._today()}", self.DAY_S)
+
+    def take_question(self, visitor: str) -> str | None:
+        """Count a question, or refuse it when the visitor's or the site's cap for today is reached."""
+        day = self._today()
+        if self.counters.add(f"ask:questions:{day}:{visitor}", self.DAY_S) > self.visitor_cap:
+            return f"That's {self.visitor_cap} questions from you today, the limit."
+        if self.counters.add(f"ask:questions:{day}", self.DAY_S) > self.daily_cap:
+            return "The site's question limit for today is reached."
+        return None
 
 
 def load_examples(path: Path = EXAMPLES_PATH) -> list[dict]:

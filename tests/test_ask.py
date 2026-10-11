@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from redis import exceptions as redis_errors
 
 from retail import ask
 from retail import metrics as m
@@ -296,11 +297,117 @@ def test_password_ok():
     assert not ask.password_ok("", "")  # no password set means locked, not open
 
 
-def test_daily_counter():
-    counter = ask.DailyCounter(cap=2)
-    day = date(2026, 1, 1)
-    assert [counter.take(day) for _ in range(3)] == [True, True, False]
-    assert counter.take(date(2026, 1, 2))  # a new day starts again
+class Clock:
+    def __init__(self):
+        self.now = 1_000_000.0
+
+    def __call__(self):
+        return self.now
+
+
+class FakeRedis:
+    """The few Redis commands Counters uses, with expiry on a fake clock."""
+
+    def __init__(self, clock):
+        self.clock, self.data, self.down = clock, {}, False
+
+    def _live(self, key):
+        if self.down:
+            raise redis_errors.ConnectionError("connection refused")
+        value = self.data.get(key)
+        if value and value[1] is not None and value[1] <= self.clock():
+            del self.data[key]
+            value = None
+        return value
+
+    def get(self, key):
+        value = self._live(key)
+        return None if value is None else str(value[0]).encode()
+
+    def pipeline(self):
+        commands = []
+
+        class Pipe:
+            def incr(_, key):
+                commands.append(("incr", key))
+
+            def expire(_, key, ttl, nx=False):
+                commands.append(("expire", key, ttl, nx))
+
+            def execute(_):
+                results = []
+                for command in commands:
+                    value = self._live(command[1]) or (0, None)
+                    if command[0] == "incr":
+                        self.data[command[1]] = (value[0] + 1, value[1])
+                        results.append(value[0] + 1)
+                    elif not (command[3] and value[1] is not None):
+                        self.data[command[1]] = (value[0], self.clock() + command[2])
+                        results.append(True)
+                return results
+
+        return Pipe()
+
+
+@pytest.mark.parametrize("backend", ["memory", "redis"])
+def test_counters_count_and_expire(backend):
+    clock = Clock()
+    counters = ask.Counters(FakeRedis(clock) if backend == "redis" else None, clock=clock)
+    assert [counters.add("k", ttl_s=60) for _ in range(3)] == [1, 2, 3]
+    assert counters.get("k") == 3 and counters.get("other") == 0
+    clock.now += 59
+    assert counters.add("k", ttl_s=60) == 4  # the expiry runs from the first add, not the latest
+    clock.now += 1
+    assert counters.get("k") == 0
+    assert counters.add("k", ttl_s=60) == 1
+
+
+def test_counters_fall_back_to_memory_while_redis_is_down():
+    clock = Clock()
+    fake = FakeRedis(clock)
+    counters = ask.Counters(fake, clock=clock)
+    counters.add("k", ttl_s=600)
+    fake.down = True
+    assert counters.add("k", ttl_s=600) == 1  # counted in memory from here
+    fake.down = False
+    assert counters.add("k", ttl_s=600) == 2  # still memory: Redis is retried after 30 s
+    clock.now += ask.Counters.RETRY_REDIS_AFTER_S
+    assert counters.add("k", ttl_s=600) == 2  # back on Redis, where the first add was kept
+
+
+def test_wrong_passwords_lock_a_visitor_out_across_sessions():
+    clock = Clock()
+    limits = ask.Limits(ask.Counters(clock=clock), daily_cap=100, visitor_cap=10, max_wrong=3,
+                        max_wrong_daily=5, today=lambda: date(2026, 1, 1))
+    for _ in range(3):
+        assert limits.locked_out("a") is None
+        limits.wrong_password("a")
+    assert "your connection" in limits.locked_out("a")
+    assert limits.locked_out("b") is None  # another visitor isn't affected
+    clock.now += ask.Limits.WRONG_PASSWORD_WINDOW_S
+    assert limits.locked_out("a") is None  # the hour is over
+    limits.wrong_password("b")
+    limits.wrong_password("c")
+    assert "site today" in limits.locked_out("d")  # 5 wrong today across visitors closes the form
+
+
+def test_question_caps_per_visitor_and_per_day():
+    day = [date(2026, 1, 1)]
+    limits = ask.Limits(ask.Counters(), daily_cap=3, visitor_cap=2, today=lambda: day[0])
+    assert [limits.take_question("a") for _ in range(2)] == [None, None]
+    assert "from you today" in limits.take_question("a")
+    assert limits.take_question("b") is None
+    assert "site's question limit" in limits.take_question("c")
+    day[0] = date(2026, 1, 2)
+    assert limits.take_question("a") is None  # a new day starts again
+
+
+def test_visitor_id_prefers_the_configured_header():
+    headers = {"CF-Connecting-IP": "203.0.113.7", "X-Forwarded-For": "198.51.100.1"}
+    assert ask.visitor_id(headers, "10.0.0.1", "CF-Connecting-IP") == ask.visitor_id({}, "203.0.113.7")
+    assert ask.visitor_id(headers, "10.0.0.1") == ask.visitor_id({}, "10.0.0.1")  # no header configured
+    assert ask.visitor_id({}, "10.0.0.1", "CF-Connecting-IP") == ask.visitor_id({}, "10.0.0.1")
+    assert len(ask.visitor_id({}, None)) == 16 and "203" not in ask.visitor_id({}, "203.0.113.7")
 
 
 def test_load_env(tmp_path, monkeypatch):

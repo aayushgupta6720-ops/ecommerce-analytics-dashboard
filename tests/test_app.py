@@ -63,6 +63,15 @@ def open_ask(monkeypatch, key: str = "", password: str = "") -> AppTest:
     return run_page("views/ask.py")
 
 
+@pytest.fixture(autouse=True)
+def fresh_ask_limits():
+    # The limits are shared by every session in the process, like on the server, so each test starts clean.
+    from retail import data
+    data.ask_limits.clear()
+    yield
+    data.ask_limits.clear()
+
+
 def page_text(at: AppTest) -> str:
     return " ".join(str(e.value) for e in [*at.markdown, *at.caption, *at.info, *at.warning, *at.error])
 
@@ -111,6 +120,18 @@ def test_ask_password_gate_and_a_stubbed_question(monkeypatch):
     text = page_text(at)
     assert "Units (net) · by month · 1 Jan 2011 – 31 Mar 2011 · Germany" in text
     assert at.selectbox(key="adj_metric").value == "units"  # the Adjust form shows the reading
+
+
+def test_ask_wrong_passwords_lock_out_a_new_session_too(monkeypatch):
+    at = open_ask(monkeypatch, key="test-key", password="pw")
+    for _ in range(5):
+        at.text_input(key="ask_password").input("wrong")
+        at.button(key="ask_unlock_button").click().run()
+    assert "Too many wrong passwords" in page_text(at)
+    fresh = open_ask(monkeypatch, key="test-key", password="pw")  # a new tab: same visitor, same lockout
+    assert not fresh.exception, fresh.exception
+    assert "Too many wrong passwords" in page_text(fresh)
+    assert "ask_password" not in [t.key for t in fresh.text_input]  # no password box to try again in
 
 
 def test_ask_declined_question_is_explained(monkeypatch):

@@ -156,8 +156,11 @@ the answer code alone against the references (also 28/28). The passing questions
 gallery.
 
 **Access.** Free-text questions are password-protected, because each one uses the free daily quota. They're
-also capped at 300 a day site-wide and 30 per session. Without the password, the examples and the Adjust panel
-(a manual query builder) still work, because neither calls the model.
+also capped at 300 a day site-wide and 30 a day per visitor. Five wrong passwords lock a visitor out for an hour,
+and 50 in a day close the password form until the next day. These limits count by visitor (a hash of the
+Cloudflare client address) and by day, never by browser session, so a new tab doesn't reset them; with
+`REDIS_URL` set they're kept in Redis and survive restarts too. Without the password, the examples and the
+Adjust panel (a manual query builder) still work, because neither calls the model.
 
 ## Predictions
 
@@ -282,8 +285,8 @@ The tests cover:
   the logistic regression, AUC against a brute-force count, and hand-checked dataset builders.
 - **Ask the data:** request validation (dates, country aliases and near-misses, product matching, unsupported
   combinations), answers against `kpis()`, the Gemini call with a stubbed transport (schema sent, quota and
-  retry handling, unusable replies), the password check, the daily cap, and the page's locked and unlocked
-  flows.
+  retry handling, unusable replies), the password check, the caps and lockout (in memory and on a fake
+  Redis, including falling back when Redis is down), and the page's locked and unlocked flows.
 - **Power BI export:** foreign-key integrity, column order vs the model, totals equal to the app's KPIs,
   the workbook round-trip, and PBIP validation.
 

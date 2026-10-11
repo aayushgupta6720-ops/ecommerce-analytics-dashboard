@@ -172,10 +172,17 @@ def ask_context():
 
 
 @st.cache_resource(show_spinner=False)
-def ask_counter(cap: int):
-    """Site-wide count of today's free-text questions (shared by every session)."""
+def ask_limits(daily_cap: int, visitor_cap: int):
+    """The Ask page's question caps and password lockout, shared by every session. They're kept in Redis when
+    REDIS_URL is set, so a restart doesn't reset them; otherwise in memory."""
+    import os
+
     from retail import ask
-    return ask.DailyCounter(cap)
+    client = None
+    if url := os.environ.get("REDIS_URL"):
+        import redis
+        client = redis.Redis.from_url(url, socket_timeout=2, socket_connect_timeout=2)
+    return ask.Limits(ask.Counters(client), daily_cap=daily_cap, visitor_cap=visitor_cap)
 
 
 @st.cache_data(max_entries=128, show_spinner=False)

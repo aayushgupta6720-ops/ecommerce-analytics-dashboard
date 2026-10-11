@@ -13,8 +13,7 @@ API_KEY = os.environ.get("GEMINI_API_KEY", "")
 PASSWORD = os.environ.get("ASK_PASSWORD", "")
 MODEL = ask.model_name(os.environ.get("ASK_MODEL"))
 DAILY_CAP = int(os.environ.get("ASK_DAILY_CAP") or 300)
-SESSION_CAP = 30
-MAX_ATTEMPTS = 5
+VISITOR_CAP = 30  # questions per visitor per day
 SORT_LABELS = {"natural": "Natural order", "desc": "Highest first", "asc": "Lowest first"}
 FORMATS = {"money": ch.money, "count": ch.number, "pct": ch.pct}
 
@@ -87,10 +86,11 @@ def question_box() -> None:
         st.info("Free-text questions are switched off here (no API key or password is set). The example "
                 "questions and the form below still work.", icon=":material/lock:")
         return
+    limits = data.ask_limits(DAILY_CAP, VISITOR_CAP)
+    visitor = ask.visitor_id(st.context.headers, st.context.ip_address, os.environ.get("CLIENT_IP_HEADER", ""))
     if not state.get("ask_unlocked"):
-        attempts = state.get("ask_attempts", 0)
-        if attempts >= MAX_ATTEMPTS:
-            st.error("Too many wrong passwords for this session.", icon=":material/lock:")
+        if refusal := limits.locked_out(visitor):
+            st.error(refusal, icon=":material/lock:")
             return
         with st.form("ask_unlock", border=True):
             st.markdown("**Free-text questions are password-protected**, because each one uses a free daily "
@@ -100,8 +100,8 @@ def question_box() -> None:
                 if ask.password_ok(given, PASSWORD):
                     state["ask_unlocked"] = True
                     st.rerun()
-                state["ask_attempts"] = attempts + 1
-                st.error("Wrong password.")
+                limits.wrong_password(visitor)
+                st.error(limits.locked_out(visitor) or "Wrong password.")
         return
 
     with st.form("ask_form", border=True):
@@ -110,13 +110,9 @@ def question_box() -> None:
         submitted = st.form_submit_button("Ask", type="primary", key="ask_button", icon=":material/search:")
     if not (submitted and question.strip()):
         return
-    if state.get("ask_count", 0) >= SESSION_CAP:
-        st.warning(f"That's {SESSION_CAP} questions in this session, the limit. The form below still works.")
+    if refusal := limits.take_question(visitor):
+        st.warning(f"{refusal} The examples and the form below still work.")
         return
-    if not data.ask_counter(DAILY_CAP).take():
-        st.warning("The site's question limit for today is reached. The examples and the form below still work.")
-        return
-    state["ask_count"] = state.get("ask_count", 0) + 1
     try:
         with st.spinner("Reading your question…"):
             raw = ask.parse_question(question, api_key=API_KEY, model=MODEL, ctx=ctx)
