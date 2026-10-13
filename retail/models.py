@@ -195,7 +195,11 @@ def clv_dataset(df: pd.DataFrame, cal_end: pd.Timestamp, holdout_end: pd.Timesta
 
 # ---------------------------------------------------------------- churn
 
-CHURN_FEATURES = ["recency_days", "frequency_365", "log_monetary_365", "tenure_days", "log_avg_order_value",
+# No tenure (days since the first order): the data starts in December 2009, so at the September 2010 training
+# cutoff no customer had more than 283 days of it, while 76% of the 2011 test customers had more. The model
+# extrapolated (longer tenure, less churn) and predicted 37% churn against 49% observed; without it the test
+# AUC rose from 0.759 to 0.770 and the mean prediction to 43%.
+CHURN_FEATURES = ["recency_days", "frequency_365", "log_monetary_365", "log_avg_order_value",
                   "log_products_365", "cancel_share_365", "is_uk"]
 
 
@@ -220,7 +224,6 @@ def churn_dataset(df: pd.DataFrame, cutoff: pd.Timestamp, horizon_days: int = 90
     out["recency_days"] = (cutoff - g_all["invoice_date"].max()).dt.days
     out["frequency_365"] = g_year["invoice_date"].apply(lambda d: d.dt.normalize().nunique())
     out["log_monetary_365"] = np.log1p(net_year.reindex(out.index).fillna(0).clip(lower=0))
-    out["tenure_days"] = (cutoff - g_all["invoice_date"].min()).dt.days
     out["log_avg_order_value"] = np.log1p((net_year / orders_year).reindex(out.index).fillna(0).clip(lower=0))
     out["log_products_365"] = np.log1p(g_year["stock_code"].nunique())
     out["cancel_share_365"] = (cancelled_year.reindex(out.index).fillna(0)

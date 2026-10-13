@@ -52,13 +52,15 @@ with churn_tab:
     scores = data.model_table("churn")
     vs_rf = c["auc_gap_vs_recency_frequency"]
     st.markdown(
-        f"**Verdict: two numbers do the work; re-base the probabilities each season.** Of the customers active in "
+        f"**Verdict: two numbers do {'most of ' if vs_rf['low'] > 0 else ''}the work; re-base the probabilities "
+        f"each season.** Of the customers active in "
         f"the year before {pd.Timestamp(c['test_cutoff']):%d %b %Y}, {ch.pct(c['test_churn_rate'], 0)} made no "
         f"purchase in the next {c['horizon_days']} days. The model, trained on the same season a year earlier "
         f"({pd.Timestamp(c['train_cutoff']):%d %b %Y}), ranks them clearly better than *longest since last order*. "
-        f"But the same regression on just days since last order and purchase days last year does as well: the "
+        f"The same regression on just days since last order and purchase days last year comes close: the "
         f"other {len(c['coefficients']) - 3} features add {vs_rf['gap']:+.3f} AUC (95% interval {vs_rf['low']:+.3f} to "
-        f"{vs_rf['high']:+.3f}), which is nothing measurable."
+        f"{vs_rf['high']:+.3f}), "
+        + ("a small but real gain." if vs_rf["low"] > 0 else "which is nothing measurable.")
     )
     k1, k2, k3, k4 = st.columns(4)
     vs_r = c["auc_gap_vs_recency"]
@@ -100,7 +102,7 @@ with churn_tab:
                                    yfmt=".0%", xtitle="risk decile (10 = riskiest)"))
 
     labels = {"recency_days": "Days since last order", "frequency_365": "Purchase days, last year",
-              "log_monetary_365": "Spend last year (log)", "tenure_days": "Days since first order",
+              "log_monetary_365": "Spend last year (log)",
               "log_avg_order_value": "Avg order value (log)", "log_products_365": "Distinct products (log)",
               "cancel_share_365": "Share of spend cancelled", "is_uk": "UK customer"}
     coef = pd.Series({labels[k]: v for k, v in c["coefficients"].items() if k != "intercept"})

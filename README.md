@@ -184,7 +184,7 @@ reads, and CI checks those results are reproducible.
 | Model | Result on unseen data | Baseline |
 |---|---|---|
 | **Revenue forecast**, 12 months ahead | Same month last year misses by **8.4%** (WAPE) | 3-month average 48.7%, last month 80.0% |
-| **Churn** (no purchase in the next 90 days), logistic regression on 8 features | AUC **0.759**; 77% of the riskiest 20% churned (base rate 49%) | "Longest since last order": AUC 0.707. The same regression on recency and frequency alone: **0.758** (gap +0.001, 95% interval −0.006 to +0.008) |
+| **Churn** (no purchase in the next 90 days), logistic regression on 7 features | AUC **0.770**; 77% of the riskiest 20% churned (base rate 49%) | "Longest since last order": AUC 0.707. The same regression on recency and frequency alone: **0.758** (gap +0.012, 95% interval +0.006 to +0.018) |
 | **Customer lifetime value**, BG/NBD + Gamma-Gamma | Purchase error 2.36 per customer; revenue ranking (Spearman) 0.588 | Calibration-year rate 2.63; last year's spend **0.618** (gap −0.031, 95% interval −0.046 to −0.016) |
 
 ![Predictions page: 12-month-ahead forecast vs actual](docs/screenshots/predictions-forecast.png)
@@ -194,9 +194,14 @@ What the evaluation showed, and the page says plainly:
 - **Churn rates swing with the season.** About 42% of customers lapse in the 90 days after a September cutoff,
   against 63–69% after December–June cutoffs. So the churn model trains on the same season a year earlier: it
   ranks customers well, but its probabilities need re-basing each season.
-- **Two features do the churn model's work.** It beats the recency rule clearly (+0.051 AUC, 95% interval +0.038
-  to +0.063, resampling customers), but recency and frequency alone in the same regression score 0.758. The other
-  six features add nothing measurable.
+- **Two features do most of the churn model's work.** It beats the recency rule clearly (+0.062 AUC, 95% interval
+  +0.050 to +0.074, resampling customers), and recency and frequency alone in the same regression score 0.758. The
+  other five features add a small but real +0.012 (+0.006 to +0.018).
+- **Days since the first order was dropped from the churn model.** The data starts in December 2009, so at the
+  September 2010 training cutoff no customer had more than 283 days of it, while 76% of the 2011 test customers had
+  more. The model extrapolated (longer tenure, less churn) and predicted 37% churn against 49% observed. Without it
+  the AUC rose from 0.759 to 0.770 and the mean prediction to 43%; the rest of the gap is autumn 2011 seeing more
+  lapsing than autumn 2010 (49% against 42%), which a model trained a year earlier can't know.
 - **The lifetime-value model is for ranking, not totals.** It cuts purchase-count error for customers with little
   history (2.47 vs 3.14), but ranks revenue slightly worse than last year's spend (0.588 vs 0.618, an interval
   that excludes zero), and over-predicts total purchases by 42%. To rank customers by value, use last year's spend.
