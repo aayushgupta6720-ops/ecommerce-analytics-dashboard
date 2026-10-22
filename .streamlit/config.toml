@@ -4,14 +4,6 @@ gatherUsageStats = false
 [client]
 toolbarMode = "viewer"
 
-[server]
-# Turns on /_stcore/script-health-check, which runs the app's landing page in a throwaway session. The
-# keep-warm pings call it instead of /_stcore/health, so the libraries get loaded and the data caches
-# filled before a visitor arrives: on Render's free instance (0.15 CPU) a fresh server's first page
-# run took about 85 s. Streamlit marks the option experimental; if an upgrade drops it, the pings get
-# 404s and cron-job.org emails after three failures.
-scriptHealthCheckEnabled = true
-
 [theme.light]
 primaryColor = "#2a78d6"
 backgroundColor = "#fcfcfb"

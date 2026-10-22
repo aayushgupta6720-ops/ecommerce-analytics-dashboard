@@ -7,10 +7,10 @@ dataset: 1,067,371 invoice lines from a UK online gift retailer, December 2009 t
 with Streamlit and Plotly, and there's a matching Power BI kit.
 
 **Live demo:** https://ecommerce-analytics-dashboard-aapp.onrender.com. It runs on Render's free plan,
-which gives it 0.15 of a CPU and puts it to sleep after 15 minutes idle. On weekdays from 09:00 to 18:00
-IST a ping every 10 minutes keeps it awake and loaded: a page shows its first chart in about 12 s on a
-first visit, much of that the browser downloading Streamlit's scripts, and in about 3–7 s after that. At
-other times the first visit has to wake it and load the app, which takes a little over a minute.
+which gives it 0.15 of a CPU and puts it to sleep after 15 minutes idle, so the first visit after a quiet
+spell has to wake it and load the app, which takes a little over a minute. While it's awake, a page shows
+its first chart in about 12 s on a first visit, much of that the browser downloading Streamlit's scripts,
+and in about 3–7 s after that.
 
 ![Overview page](docs/screenshots/overview.png)
 
@@ -264,11 +264,6 @@ point. The data files aren't committed because they're large; the export regener
 - **Build**: installs `requirements.txt`, then converts the parquet file to an uncompressed Arrow file.
   The app memory-maps that file at startup.
 - **Start**: `streamlit run app.py` on `$PORT`, with health check `/_stcore/health`.
-- **Keep-warm**: a cron-job.org job calls `/_stcore/script-health-check` every 10 minutes on weekdays from
-  09:00 to 18:00 IST. `.streamlit/config.toml` turns that endpoint on; it runs the Overview page, so the
-  libraries and the data are loaded before a visitor arrives instead of during their first visit (about 40 s
-  on a freshly started server with the free plan's 0.15 CPU). The window is limited because Render's 750
-  free hours a month are shared by all my services.
 - **Secrets** for Ask the data, set in the Render dashboard (never committed): `GEMINI_API_KEY` and
   `ASK_PASSWORD`. Without them, the page still serves the examples and the manual builder. For local runs, put
   them in a `.env` file (gitignored).
