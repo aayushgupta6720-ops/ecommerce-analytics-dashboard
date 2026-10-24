@@ -362,6 +362,12 @@ def test_counters_count_and_expire(backend):
     assert counters.add("k", ttl_s=60) == 1
 
 
+def test_counter_keys_carry_the_app_prefix_in_the_shared_redis():
+    fake = FakeRedis(Clock())
+    ask.Counters(fake).add("ask:questions:2026-10-25", ttl_s=60)
+    assert list(fake.data) == ["ecommerce:ask:questions:2026-10-25"]
+
+
 def test_counters_fall_back_to_memory_while_redis_is_down():
     clock = Clock()
     fake = FakeRedis(clock)

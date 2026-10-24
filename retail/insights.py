@@ -205,12 +205,13 @@ def guests(df: pd.DataFrame) -> dict[str, float]:
                                 "invoice_date"])
     g = s["customer_id"].isna().to_numpy()
     gross = s["revenue"].to_numpy()
-    web = set(df.loc[df["stock_code"].astype(str) == "DOT", "invoice"].astype(str))
-    on_web = s["invoice"].astype(str).isin(web).to_numpy()
-    web_invoices = df[df["invoice"].astype(str).isin(web)].groupby("invoice")["customer_id"].apply(
-        lambda ids: ids.isna().all())
+    # The code columns are categoricals: compare and group on them directly rather than turning 1M rows into strings.
+    web = set(df.loc[(df["stock_code"] == "DOT").to_numpy(), "invoice"].astype(str))
+    on_web = s["invoice"].isin(web).to_numpy()
+    web_lines = df.loc[df["invoice"].isin(web).to_numpy(), ["invoice", "customer_id"]]
+    web_invoices = web_lines["customer_id"].isna().groupby(web_lines["invoice"], observed=True).all()
     month = s["invoice_date"].dt.to_period("M")
-    prices = s.groupby([s["stock_code"].astype(str), month, pd.Series(g, index=s.index, name="guest")])[
+    prices = s.groupby([s["stock_code"], month, pd.Series(g, index=s.index, name="guest")], observed=True)[
         "price"].median().unstack().dropna()
     return {
         "line_share": float(g.mean()) if len(g) else 0.0,
@@ -237,10 +238,10 @@ def bundle_opportunities(df: pd.DataFrame, top_n: int = 8, min_support: float = 
     pairs = rules.assign(key=[tuple(sorted(k)) for k in zip(rules["antecedent"], rules["consequent"], strict=True)])
     pairs = pairs.drop_duplicates("key").head(top_n).reset_index(drop=True)
     s = metrics.sales_rows(df, ["invoice", "stock_code"])
-    codes = s["stock_code"].astype(str).to_numpy()
-    invoices = s["invoice"].astype(str).to_numpy()
     wanted = set(pairs["antecedent"]) | set(pairs["consequent"])
-    baskets = {code: set(invoices[codes == code]) for code in wanted}
+    # Each wanted product's orders, as integer invoice codes: no per-row string conversion of ~1M lines.
+    invoices = pd.factorize(s["invoice"])[0]
+    baskets = {code: set(invoices[(s["stock_code"] == code).to_numpy()]) for code in wanted}
     summary = metrics.product_summary(df).set_index("stock_code")
     pairs["orders_without_b"] = [len(baskets[a] - baskets[b]) for a, b in zip(pairs["antecedent"], pairs["consequent"],
                                                                               strict=True)]

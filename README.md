@@ -174,7 +174,8 @@ references (45/45). The passing dev questions become the page's example gallery;
 also capped at 300 a day site-wide and 30 a day per visitor. Five wrong passwords lock a visitor out for an hour,
 and 50 in a day close the password form until the next day. These limits count by visitor (a hash of the
 Cloudflare client address) and by day, never by browser session, so a new tab doesn't reset them; with
-`REDIS_URL` set they're kept in Redis and survive restarts too. Without the password, the examples and the
+`REDIS_URL` set they're kept in Redis and survive restarts too (under keys starting `ecommerce:`, since the
+instance is shared with my other apps). Without the password, the examples and the
 Adjust panel (a manual query builder) still work, because neither calls the model.
 
 ## Predictions
@@ -275,6 +276,10 @@ Memory was profiled for Render's 512 MB instance:
 - The savings come from calculations working on integer category codes with numpy instead of copying 1M-row
   columns, the memory-mapped Arrow load, DuckDB capped at 64 MB with a streaming (`NOT MATERIALIZED`) filter, and
   handing freed memory back to the OS after every uncached calculation.
+- The rows are stored in date order, so a date filter is a slice that shares memory with the full table; a
+  boolean mask copied every matching row (about 30 MB for a year). CSV downloads are built only when clicked,
+  not on every rerun, and a selection that changes one chart (segment highlight, product drill-down, "customers
+  who bought…") redraws only that chart.
 - `MALLOC_ARENA_MAX=2` stops glibc from growing a memory arena per session thread, and `MALLOC_MMAP_THRESHOLD_`
   makes large temporary arrays go straight back to the OS when they're freed.
 

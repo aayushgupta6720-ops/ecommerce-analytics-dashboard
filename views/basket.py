@@ -61,19 +61,25 @@ st.caption("With every pair shown, the strongest are colour or design variants o
            "Playhouse rooms or polka-dot cups: \"complete the set\" prompts, not cross-selling. The pairs across "
            "ranges are the ones a recommendation could add.")
 
-left, right = st.columns([2, 3], gap="large")
-with left:
-    antecedents = (view.groupby(["antecedent", "antecedent_desc"]).size().reset_index(name="n")
-                   .sort_values("n", ascending=False))
-    labels = dict(zip(antecedents["antecedent"],
-                      antecedents["antecedent"] + " · " + ch.nice(antecedents["antecedent_desc"])))
-    code = st.selectbox("Customers who bought…", list(labels), format_func=labels.get)
-    st.caption("Products with the most rules at the current thresholds are listed first.")
-with right:
-    also = view[view["antecedent"] == code].nlargest(10, "confidence")
-    ch.show(ch.bar_h(ch.nice(also["consequent_desc"], 40), also["confidence"], title="…also bought", fmt=ch.pct,
-                     hover=[f"{d}<br>{c:.0%} of these orders · lift {lift:.1f}×"
-                            for d, c, lift in zip(also["consequent_desc"], also["confidence"], also["lift"])]))
+@st.fragment
+def also_bought(view) -> None:
+    """A fragment, so picking a product redraws this pair of panels and not the rest of the page."""
+    left, right = st.columns([2, 3], gap="large")
+    with left:
+        antecedents = (view.groupby(["antecedent", "antecedent_desc"]).size().reset_index(name="n")
+                       .sort_values("n", ascending=False))
+        labels = dict(zip(antecedents["antecedent"],
+                          antecedents["antecedent"] + " · " + ch.nice(antecedents["antecedent_desc"])))
+        code = st.selectbox("Customers who bought…", list(labels), format_func=labels.get)
+        st.caption("Products with the most rules at the current thresholds are listed first.")
+    with right:
+        also = view[view["antecedent"] == code].nlargest(10, "confidence")
+        ch.show(ch.bar_h(ch.nice(also["consequent_desc"], 40), also["confidence"], title="…also bought", fmt=ch.pct,
+                         hover=[f"{d}<br>{c:.0%} of these orders · lift {lift:.1f}×"
+                                for d, c, lift in zip(also["consequent_desc"], also["confidence"], also["lift"])]))
+
+
+also_bought(view)
 
 st.dataframe(
     view, hide_index=True, width="stretch", height=380,
@@ -86,5 +92,5 @@ st.dataframe(
         "lift": st.column_config.NumberColumn("Lift", format="%.1f×"),
     },
 )
-st.download_button("Download rules (CSV)", view.to_csv(index=False), "basket_rules.csv", "text/csv",
-                   icon=":material/download:")
+st.download_button("Download rules (CSV)", lambda: view.to_csv(index=False), "basket_rules.csv",
+                   "text/csv", icon=":material/download:", on_click="ignore")

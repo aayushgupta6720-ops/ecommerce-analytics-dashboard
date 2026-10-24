@@ -42,11 +42,23 @@ def filter_mask(df: pd.DataFrame, start: date, end: date, countries: tuple[str, 
 
 
 def filter_frame(df: pd.DataFrame, start: date, end: date, countries: tuple[str, ...] = ()) -> pd.DataFrame:
-    """Rows with invoice_date in [start, end] (inclusive days) and, if given, in `countries`."""
-    mask = filter_mask(df, start, end, countries)
-    # The unfiltered view is the common case; skip copying the whole frame for it.
-    # Callers treat the result as read-only either way.
-    return df if mask.all() else df[mask]
+    """Rows with invoice_date in [start, end] (inclusive days) and, if given, in `countries`.
+
+    Callers treat the result as read-only, so it can share memory with `df`.
+    """
+    ts = df["invoice_date"].to_numpy()
+    if not (ts[1:] >= ts[:-1]).all():
+        mask = filter_mask(df, start, end, countries)
+        return df if mask.all() else df[mask]
+    # scripts/build_dataset.py stores the rows in date order, so a date range is one contiguous block, and
+    # slicing it shares memory with the 1M-row frame where a boolean mask would copy every matching row.
+    lo, hi = np.searchsorted(ts, [pd.Timestamp(start).to_datetime64(),
+                                  (pd.Timestamp(end) + pd.Timedelta(days=1)).to_datetime64()])
+    out = df if (lo, hi) == (0, len(df)) else df.iloc[lo:hi]
+    if countries:
+        keep = out["country"].isin(countries).to_numpy()
+        out = out if keep.all() else out[keep]
+    return out
 
 
 def sales_rows(df: pd.DataFrame, cols: list[str] | None = None) -> pd.DataFrame:
@@ -345,11 +357,11 @@ def rfm(df: pd.DataFrame, snapshot: date) -> pd.DataFrame:
             last_purchase=("invoice_date", "max"),
             frequency=("invoice", "nunique"),
             monetary=("revenue", "sum"),
-            country=("country", lambda c: c.mode().iat[0]),
         )
         .reset_index()
         .sort_values("customer_id", ignore_index=True)
     )
+    out["country"] = out["customer_id"].map(_most_common_country(s))
     out["monetary"] = out["monetary"] + out["customer_id"].map(cancelled).fillna(0.0).to_numpy()
     if out.empty:
         return out.assign(recency=[], r_score=[], f_score=[], m_score=[], segment=[])
@@ -360,6 +372,15 @@ def rfm(df: pd.DataFrame, snapshot: date) -> pd.DataFrame:
     out["m_score"] = _quintile(out["monetary"])
     out["segment"] = [SEGMENT_LOOKUP[rf] for rf in zip(out["r_score"], out["f_score"])]
     return out
+
+
+def _most_common_country(s: pd.DataFrame) -> pd.Series:
+    """Each customer's most frequent country across their lines. A tie goes to the first in category
+    order, which is what `Series.mode().iat[0]` picks; counting pairs avoids calling it per customer."""
+    counts = s.groupby(["customer_id", "country"], observed=True).size().rename("n").reset_index()
+    counts["order"] = counts["country"].cat.codes
+    top = counts.sort_values(["customer_id", "n", "order"], ascending=[True, False, True], kind="stable")
+    return top.drop_duplicates("customer_id").set_index("customer_id")["country"]
 
 
 def segment_summary(r: pd.DataFrame) -> pd.DataFrame:
@@ -541,10 +562,8 @@ def product_returns(df: pd.DataFrame, min_units_sold: int = 100) -> pd.DataFrame
     sold = s.groupby("stock_code", observed=True).agg(
         description=("description", "first"), units_sold=("quantity", "sum"), revenue=("revenue", "sum"))
     returned = c.groupby("stock_code", observed=True).agg(
-        units_cancelled=("quantity", lambda q: -q.sum()),
-        cancelled_value=("revenue", lambda r: -r.sum()),
-        cancellations=("invoice", "nunique"),
-    )
+        units_cancelled=("quantity", "sum"), cancelled_value=("revenue", "sum"), cancellations=("invoice", "nunique"))
+    returned[["units_cancelled", "cancelled_value"]] *= -1  # cancellation lines are negative
     out = sold.join(returned, how="inner").reset_index()
     out = out[out["units_sold"] >= min_units_sold]
     out["stock_code"] = out["stock_code"].astype(str)
@@ -570,8 +589,8 @@ def customer_returns(df: pd.DataFrame, min_orders: int = 3) -> pd.DataFrame:
     s, c = s[s["customer_id"].notna()], c[c["customer_id"].notna()]
     bought = s.groupby("customer_id").agg(
         orders=("invoice", "nunique"), revenue=("revenue", "sum"), country=("country", "first"))
-    returned = c.groupby("customer_id").agg(
-        cancellations=("invoice", "nunique"), cancelled_value=("revenue", lambda r: -r.sum()))
+    returned = c.groupby("customer_id").agg(cancellations=("invoice", "nunique"), cancelled_value=("revenue", "sum"))
+    returned["cancelled_value"] *= -1
     out = bought.join(returned, how="inner").reset_index()
     out = out[out["orders"] >= min_orders]
     out["country"] = out["country"].astype(str)

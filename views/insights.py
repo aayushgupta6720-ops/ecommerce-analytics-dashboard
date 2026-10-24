@@ -101,8 +101,8 @@ with st.container(border=True):
                                                                                        format="£%,.0f"),
                                     "risk_percentile": st.column_config.ProgressColumn(
                                         "Churn risk percentile", format="percent", min_value=0, max_value=1)})
-        st.download_button("Download the Champions watch list (CSV)", champ.to_csv(index=False),
-                           "champions_watch_list.csv", "text/csv", icon=":material/download:")
+        st.download_button("Download the Champions watch list (CSV)", lambda: champ.to_csv(index=False),
+                           "champions_watch_list.csv", "text/csv", icon=":material/download:", on_click="ignore")
 
 # ---------------------------------------------------------------- 2. Win-back
 with st.container(border=True):
@@ -138,8 +138,8 @@ with st.container(border=True):
                                         "Lifetime spend", format="£%,.0f"),
                                     "last_active_year_revenue": st.column_config.NumberColumn(
                                         "Spend in last active year", format="£%,.0f")})
-        st.download_button("Download the win-back list (CSV)", wb.to_csv(index=False), "winback_list.csv", "text/csv",
-                           icon=":material/download:")
+        st.download_button("Download the win-back list (CSV)", lambda: wb.to_csv(index=False), "winback_list.csv",
+                           "text/csv", icon=":material/download:", on_click="ignore")
 
 # ---------------------------------------------------------------- 3. Peak
 with st.container(border=True):

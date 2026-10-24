@@ -602,8 +602,11 @@ def password_ok(given: str, expected: str) -> bool:
 class Counters:
     """Counters that expire, shared by every session. With a Redis client they live in Redis, so a restart,
     a spin-down or a second instance doesn't reset them; without one, or for 30 s after a Redis error,
-    they're kept in this process's memory, which a restart clears."""
+    they're kept in this process's memory, which a restart clears.
 
+    The Redis instance is shared with my other apps, so every key here starts with PREFIX."""
+
+    PREFIX = "ecommerce:"
     RETRY_REDIS_AFTER_S = 30
 
     def __init__(self, client=None, clock: Callable[[], float] = time.time):
@@ -622,6 +625,7 @@ class Counters:
 
     def add(self, key: str, ttl_s: int) -> int:
         """Count one more and return the new count. A counter expires ttl_s after its first add."""
+        key = self.PREFIX + key
         if self._use_redis():
             try:
                 pipe = self.client.pipeline()  # MULTI/EXEC, so the count and its expiry are set together
@@ -641,6 +645,7 @@ class Counters:
             return count + 1
 
     def get(self, key: str) -> int:
+        key = self.PREFIX + key
         if self._use_redis():
             try:
                 return int(self.client.get(key) or 0)

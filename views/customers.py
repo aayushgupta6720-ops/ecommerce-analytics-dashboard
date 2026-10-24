@@ -64,15 +64,22 @@ st.dataframe(
     },
 )
 
-pick = st.selectbox("Highlight a segment", seg["segment"].tolist(), index=0)
-ch.show(ch.scatter_highlight(
-    r, "recency", "frequency", highlight=r["segment"] == pick, highlight_name=pick,
-    title="Every customer: days since last order vs number of orders",
-    xlabel="Days since last order", ylabel="Orders (log scale)", log_y=True,
-    hover=[f"Customer {c} · {s}<br>{rec:,} days · {fr:,} orders · {ch.money(mo)}"
-           for c, s, rec, fr, mo in zip(r["customer_id"], r["segment"], r["recency"], r["frequency"], r["monetary"])],
-))
+@st.fragment
+def segment_scatter(r, segments: list[str]) -> None:
+    """A fragment, so picking a segment redraws this chart and not the rest of the page."""
+    pick = st.selectbox("Highlight a segment", segments, index=0)
+    ch.show(ch.scatter_highlight(
+        r, "recency", "frequency", highlight=r["segment"] == pick, highlight_name=pick,
+        title="Every customer: days since last order vs number of orders",
+        xlabel="Days since last order", ylabel="Orders (log scale)", log_y=True,
+        hover=[f"Customer {c} · {s}<br>{rec:,} days · {fr:,} orders · {ch.money(mo)}"
+               for c, s, rec, fr, mo in zip(r["customer_id"], r["segment"], r["recency"], r["frequency"],
+                                            r["monetary"])],
+    ))
+
+
+segment_scatter(r, seg["segment"].tolist())
 
 export = r[["customer_id", "country", "recency", "frequency", "monetary", "r_score", "f_score", "m_score", "segment"]]
-st.download_button("Download customer segments (CSV)", export.to_csv(index=False), "rfm_segments.csv", "text/csv",
-                   icon=":material/download:")
+st.download_button("Download customer segments (CSV)", lambda: export.to_csv(index=False), "rfm_segments.csv",
+                   "text/csv", icon=":material/download:", on_click="ignore")

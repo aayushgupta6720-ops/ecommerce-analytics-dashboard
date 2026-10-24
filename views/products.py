@@ -40,28 +40,34 @@ with st.expander("All products"):
                        "customers": st.column_config.NumberColumn("Customers", format="%,d")},
     )
 
-st.subheader("Product drill-down")
-choices = summary.head(500)
-labels = dict(zip(choices["stock_code"], choices["stock_code"] + " · " + ch.nice(choices["description"])))
-code = st.selectbox("Product (top 500 by revenue)", list(labels), format_func=labels.get)
-row = summary.set_index("stock_code").loc[code]
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Net revenue", ch.money(row["revenue"], 2), border=True)
-m2.metric("Units (net)", f"{row['units']:,}", border=True)
-m3.metric("Orders", f"{row['orders']:,}", border=True)
-m4.metric("Revenue rank", f"#{summary.index[summary['stock_code'] == code][0] + 1:,}", border=True)
+@st.fragment
+def drill_down(f, summary) -> None:
+    """A fragment, so picking a product redraws the drill-down and not the rankings above it."""
+    st.subheader("Product drill-down")
+    choices = summary.head(500)
+    labels = dict(zip(choices["stock_code"], choices["stock_code"] + " · " + ch.nice(choices["description"])))
+    code = st.selectbox("Product (top 500 by revenue)", list(labels), format_func=labels.get)
+    row = summary.set_index("stock_code").loc[code]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Net revenue", ch.money(row["revenue"], 2), border=True)
+    m2.metric("Units (net)", f"{row['units']:,}", border=True)
+    m3.metric("Orders", f"{row['orders']:,}", border=True)
+    m4.metric("Revenue rank", f"#{summary.index[summary['stock_code'] == code][0] + 1:,}", border=True)
 
-detail = data.compute("product_detail", f, stock_code=code)
-a, b, c = st.columns(3, gap="large")
-with a:
-    ch.show(ch.bar_v(detail["monthly"]["month"], detail["monthly"]["revenue"], title="Monthly revenue", yprefix="£",
-                     hover=[f"{m:%b %Y}: {ch.money(v)}" for m, v in zip(detail["monthly"]["month"],
-                                                                      detail["monthly"]["revenue"])]))
-with b:
-    prices = detail["prices"].nlargest(12, "units").sort_values("price")
-    ch.show(ch.bar_v(prices["price"].map(lambda v: f"£{v:.2f}"), prices["units"], title="Units sold at each price",
-                     fmt=ch.number, hover=[f"£{p:.2f}: {u:,} units on {n:,} lines"
-                                           for p, u, n in zip(prices["price"], prices["units"], prices["lines"])]))
-    st.caption("Lower unit prices usually mean wholesale-quantity orders.")
-with c:
-    ch.show(ch.bar_h(detail["countries"]["country"], detail["countries"]["revenue"], title="Top countries"))
+    detail = data.compute("product_detail", f, stock_code=code)
+    a, b, c = st.columns(3, gap="large")
+    with a:
+        ch.show(ch.bar_v(detail["monthly"]["month"], detail["monthly"]["revenue"], title="Monthly revenue", yprefix="£",
+                         hover=[f"{m:%b %Y}: {ch.money(v)}" for m, v in zip(detail["monthly"]["month"],
+                                                                          detail["monthly"]["revenue"])]))
+    with b:
+        prices = detail["prices"].nlargest(12, "units").sort_values("price")
+        ch.show(ch.bar_v(prices["price"].map(lambda v: f"£{v:.2f}"), prices["units"], title="Units sold at each price",
+                         fmt=ch.number, hover=[f"£{p:.2f}: {u:,} units on {n:,} lines"
+                                               for p, u, n in zip(prices["price"], prices["units"], prices["lines"])]))
+        st.caption("Lower unit prices usually mean wholesale-quantity orders.")
+    with c:
+        ch.show(ch.bar_h(detail["countries"]["country"], detail["countries"]["revenue"], title="Top countries"))
+
+
+drill_down(f, summary)

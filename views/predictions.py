@@ -140,8 +140,8 @@ with churn_tab:
                        "recency_days": "Days since last order", "frequency_365": "Purchase days, last year",
                        "churned": st.column_config.CheckboxColumn("Actually churned")},
     )
-    st.download_button("Download churn scores (CSV)", scores.to_csv(index=False), "churn_scores.csv", "text/csv",
-                       icon=":material/download:")
+    st.download_button("Download churn scores (CSV)", lambda: scores.to_csv(index=False), "churn_scores.csv",
+                       "text/csv", icon=":material/download:", on_click="ignore")
 
 # ---------------------------------------------------------------- CLV
 with clv_tab:
@@ -224,5 +224,5 @@ with clv_tab:
                        "actual_purchases": st.column_config.NumberColumn("Actual purchases", format="%d"),
                        "actual_revenue": st.column_config.NumberColumn("Actual revenue", format="£%,.0f")},
     )
-    st.download_button("Download CLV predictions (CSV)", clv.to_csv(index=False), "clv_predictions.csv", "text/csv",
-                       icon=":material/download:")
+    st.download_button("Download CLV predictions (CSV)", lambda: clv.to_csv(index=False), "clv_predictions.csv",
+                       "text/csv", icon=":material/download:", on_click="ignore")
