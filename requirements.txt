@@ -1,4 +1,4 @@
-# Runtime (what Render installs)
+# Runtime (what the deployed app installs)
 streamlit==1.64.0
 pandas==3.0.6
 pyarrow==25.0.1

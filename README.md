@@ -6,11 +6,10 @@ An interactive analytics dashboard for the [UCI Online Retail II](https://archiv
 dataset: 1,067,371 invoice lines from a UK online gift retailer, December 2009 to December 2011. It's built
 with Streamlit and Plotly, and there's a matching Power BI kit.
 
-**Live demo:** https://ecommerce-analytics-dashboard-aapp.onrender.com. It runs on Render's free plan,
-which gives it 0.15 of a CPU and puts it to sleep after 15 minutes idle, so the first visit after a quiet
-spell has to wake it and load the app, which takes a little over a minute. While it's awake, a page shows
-its first chart in about 12 s on a first visit, much of that the browser downloading Streamlit's scripts,
-and in about 3–7 s after that.
+**Live demo:** https://ecommerce-analytics-dashboard-uci.streamlit.app. It runs on Streamlit Community
+Cloud's free tier, which puts it to sleep after 12 hours without visitors; the first visitor after that gets
+a button to wake it. While it's awake, a page shows its first chart in about 11 s on a first visit, much of
+that the browser downloading Streamlit's scripts, and in about 4 s after that.
 
 ![Overview page](docs/screenshots/overview.png)
 
@@ -173,16 +172,16 @@ references (45/45). The passing dev questions become the page's example gallery;
 **Access.** Free-text questions are password-protected, because each one uses the free daily quota. They're
 also capped at 300 a day site-wide and 30 a day per visitor. Five wrong passwords lock a visitor out for an hour,
 and 50 in a day close the password form until the next day. These limits count by visitor (a hash of the
-Cloudflare client address) and by day, never by browser session, so a new tab doesn't reset them; with
-`REDIS_URL` set they're kept in Redis and survive restarts too (under keys starting `ecommerce:`, since the
-instance is shared with my other apps). Without the password, the examples and the
-Adjust panel (a manual query builder) still work, because neither calls the model.
+client address) and by day, never by browser session, so a new tab doesn't reset them; with `REDIS_URL` set
+they're kept in Redis and survive restarts too (under keys starting `ecommerce:`, so one Redis instance can
+serve several apps). The live demo has no Redis, so its counts start again when the app restarts. Without the
+password, the examples and the Adjust panel (a manual query builder) still work, because neither calls the model.
 
 ## Predictions
 
 Each model is scored on a period it never saw, against a simple baseline: the forecast and lifetime value on the
 365 days after 9 Dec 2010, churn on the 90 days after 11 Sep 2011 (trained on the same season a year earlier). The models are implemented with numpy/scipy in [`retail/models.py`](retail/models.py),
-so the 512 MB server needs no ML framework; `scripts/train_models.py` fits them and writes the results the page
+so the app needs no ML framework; `scripts/train_models.py` fits them and writes the results the page
 reads, and CI checks those results are reproducible.
 
 | Model | Result on unseen data | Baseline |
@@ -258,16 +257,25 @@ every field reference exists. It hasn't been opened in Power BI Desktop yet, so 
 point. The data files aren't committed because they're large; the export regenerates them in about
 3 minutes.
 
-## Deploying to Render
+## Deploying
 
-`render.yaml` defines a free-plan Python web service:
+The live demo runs on Streamlit Community Cloud, which redeploys from `main` on every push:
+
+- It installs `requirements.txt` and runs `app.py`. There's no build step, so the app reads the committed
+  parquet file directly rather than the memory-mapped Arrow copy described below; the same 1,027,015 rows load
+  either way, and the parquet load peaks at about 340 MB.
+- **Secrets** for Ask the data go in the app's Secrets settings (never committed): `GEMINI_API_KEY` and
+  `ASK_PASSWORD`. Without them, the page still serves the examples and the manual builder. For local runs, put
+  them in a `.env` file (gitignored).
+
+### Render
+
+`render.yaml` defines a free-plan Render web service, where the demo ran until October 2026:
 
 - **Build**: installs `requirements.txt`, then converts the parquet file to an uncompressed Arrow file.
   The app memory-maps that file at startup.
 - **Start**: `streamlit run app.py` on `$PORT`, with health check `/_stcore/health`.
-- **Secrets** for Ask the data, set in the Render dashboard (never committed): `GEMINI_API_KEY` and
-  `ASK_PASSWORD`. Without them, the page still serves the examples and the manual builder. For local runs, put
-  them in a `.env` file (gitignored).
+- **Secrets**: the same two, set in the Render dashboard.
 
 Memory was profiled for Render's 512 MB instance:
 - On the live instance the app idles at about 100 MB and peaked at about 440 MB while every page was visited in

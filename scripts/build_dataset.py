@@ -3,7 +3,7 @@
 Usage:
     python scripts/build_dataset.py            # download (if needed), clean, write parquet
     python scripts/build_dataset.py --xlsx PATH  # use a local copy of online_retail_II.xlsx
-    python scripts/build_dataset.py --feather-only  # just convert the committed parquet (Render build step)
+    python scripts/build_dataset.py --feather-only  # just convert the committed parquet (the Render build step)
 
 Parsing the 1M-row xlsx takes a few minutes, so the raw sheets are cached to
 data/raw/raw.parquet after the first run. Delete it to force a re-parse.
